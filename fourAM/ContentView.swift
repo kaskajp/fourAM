@@ -7,48 +7,78 @@
 
 import SwiftUI
 import SwiftData
+import AppKit // Needed for NSOpenPanel on macOS
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var items: [Item]
 
+    @StateObject private var libraryViewModel = LibraryViewModel()
+    
+    // Group audio files by artist
+    private var artistsDictionary: [String: [Track]] {
+        Dictionary(grouping: libraryViewModel.tracks, by: \.artist)
+    }
+
+    // Create a sorted list of artist names
+    private var artistNames: [String] {
+        artistsDictionary.keys.sorted()
+    }
+
     var body: some View {
         NavigationSplitView {
             List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+                // 2. Music library section
+                Section("Library") {
+                    // 1) Artists
+                    NavigationLink("Artists") {
+                        ArtistsView(libraryViewModel: libraryViewModel)
+                    }
+                    // 2) Albums
+                    NavigationLink("Albums") {
+                        AlbumsView(libraryViewModel: libraryViewModel)
+                    }
+                    // 3) Tracks
+                    NavigationLink("Tracks") {
+                        TracksView(libraryViewModel: libraryViewModel)
                     }
                 }
-                .onDelete(perform: deleteItems)
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
             .toolbar {
+                // 5. New "Add Folder" button for scanning music
                 ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
+                    Button(action: pickFolder) {
+                        Label("Add Folder", systemImage: "folder.badge.plus")
+                    }
+                }
+                ToolbarItem {
+                    // Button to fetch & display the saved tracks
+                    Button("Fetch Saved Tracks", systemImage: "folder.badge.minus") {
+                        libraryViewModel.fetchTracks(context: modelContext)
                     }
                 }
             }
         } detail: {
-            Text("Select an item")
+            Text("Select an item (or track)")
+                .padding()
         }
     }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
+    // MARK: - Folder Picker for Music
 
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
+    /// Opens an NSOpenPanel to pick a folder, then scans audio files.
+    private func pickFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+
+        if panel.runModal() == .OK, let selectedFolder = panel.url {
+            // Use the libraryViewModel to scan & insert tracks into SwiftData
+            libraryViewModel.loadLibrary(folderPath: selectedFolder.path, context: modelContext)
+            // Optionally fetch again afterwards
+            libraryViewModel.fetchTracks(context: modelContext)
         }
     }
 }
