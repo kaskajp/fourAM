@@ -69,9 +69,15 @@ struct ContentView: View {
                     }
                 }
             }
+            // Playback Controls at the bottom
+            PlaybackControlsView()
         } detail: {
             Text("Select an item (or track)")
                 .padding()
+        }
+        .onAppear() {
+            // Fetch saved tracks when the view appears
+            libraryViewModel.fetchTracks(context: modelContext)
         }
     }
 
@@ -86,16 +92,42 @@ struct ContentView: View {
 
         if panel.runModal() == .OK, let selectedFolder = panel.url {
             do {
-                // Save the folder as a security-scoped bookmark
+                // Save a bookmark for the folder
                 try BookmarkManager.storeBookmark(for: selectedFolder)
+                print("Bookmark stored for folder: \(selectedFolder.path)")
+
+                // Start accessing the folder's security scope
+                guard selectedFolder.startAccessingSecurityScopedResource() else {
+                    print("Failed to start accessing security scope for folder")
+                    return
+                }
+                defer { selectedFolder.stopAccessingSecurityScopedResource() }
+
+                // Dynamically resolve files within the folder
+                let fileManager = FileManager.default
+                let enumerator = fileManager.enumerator(
+                    at: selectedFolder,
+                    includingPropertiesForKeys: nil,
+                    options: [.skipsHiddenFiles, .skipsPackageDescendants]
+                )
+
+                for fileURL in enumerator?.compactMap({ $0 as? URL }) ?? [] {
+                    // Check if the file is an audio file
+                    if fileURL.pathExtension.lowercased() == "mp3" ||
+                       fileURL.pathExtension.lowercased() == "m4a" ||
+                       fileURL.pathExtension.lowercased() == "flac" {
+                        // Store a bookmark for each audio file
+                        try BookmarkManager.storeBookmark(for: fileURL)
+                        print("Stored bookmark for file: \(fileURL.path)")
+                    }
+                }
+
+                // Use the libraryViewModel to scan & insert tracks into SwiftData
+                libraryViewModel.loadLibrary(folderPath: selectedFolder.path, context: modelContext)
+
             } catch {
-                print("Failed to store bookmark: \(error)")
+                print("Error processing folder: \(error)")
             }
-            
-            // Use the libraryViewModel to scan & insert tracks into SwiftData
-            libraryViewModel.loadLibrary(folderPath: selectedFolder.path, context: modelContext)
-            // Optionally fetch again afterwards
-            // libraryViewModel.fetchTracks(context: modelContext)
         }
     }
 }

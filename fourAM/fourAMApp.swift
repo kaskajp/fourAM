@@ -21,8 +21,12 @@ struct fourAMApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                // 1) Create a model container for our Track model
                 .modelContainer(for: Track.self)
+        }
+        
+        // Add the settings scene
+        Settings {
+            SettingsView()
         }
     }
 }

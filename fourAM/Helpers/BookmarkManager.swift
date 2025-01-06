@@ -5,7 +5,7 @@
 //  Created by Jonas on 2025-01-06.
 //
 // MARK: - BookmarkManager.swift
-import SwiftUI
+import Foundation
 
 struct BookmarkManager {
     private static let storedBookmarksKey = "StoredBookmarks"
@@ -19,37 +19,35 @@ struct BookmarkManager {
         }
     }
 
-    static func storeBookmark(for folderURL: URL) throws {
-        let data = try folderURL.bookmarkData(options: .withSecurityScope,
-                                              includingResourceValuesForKeys: nil,
-                                              relativeTo: nil)
+    // Store a bookmark for a given file or folder
+    static func storeBookmark(for url: URL) throws {
+        let bookmarkData = try url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
         var dict = bookmarksDict
-        dict[folderURL.path] = data
+        dict[url.path] = bookmarkData
         bookmarksDict = dict
     }
 
-    static func resolveBookmark(for folderPath: String) -> URL? {
-        guard let data = bookmarksDict[folderPath] else { return nil }
+    // Resolve a previously stored bookmark
+    static func resolveBookmark(for path: String) -> URL? {
+        guard let data = bookmarksDict[path] else { return nil }
         var isStale = false
         do {
-            let resolvedURL = try URL(resolvingBookmarkData: data,
-                                      options: .withSecurityScope,
-                                      relativeTo: nil,
-                                      bookmarkDataIsStale: &isStale)
+            let resolvedURL = try URL(resolvingBookmarkData: data, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
             if isStale {
-                removeBookmark(for: folderPath)
+                removeBookmark(for: path)
                 return nil
             }
             return resolvedURL
         } catch {
-            print("Error resolving bookmark: \(error)")
+            print("Error resolving bookmark for \(path): \(error)")
             return nil
         }
     }
 
-    static func removeBookmark(for folderPath: String) {
+    // Remove a bookmark for a given path
+    static func removeBookmark(for path: String) {
         var dict = bookmarksDict
-        dict.removeValue(forKey: folderPath)
+        dict.removeValue(forKey: path)
         bookmarksDict = dict
     }
     

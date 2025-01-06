@@ -10,6 +10,8 @@ import AppKit
 
 struct AlbumDetailView: View {
     let album: Album
+        
+    @State private var selectedTrack: Track? // Track currently selected
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -36,7 +38,7 @@ struct AlbumDetailView: View {
             .padding(.bottom, 8)
 
             // Track list
-            List(album.tracks) { track in
+            List(album.tracks, id: \.id, selection: $selectedTrack) { track in
                 HStack {
                     // Track number on the left
                     Text("\(track.trackNumber)")
@@ -51,6 +53,23 @@ struct AlbumDetailView: View {
                     // Duration on the right
                     Text(track.durationString)
                 }
+                .padding(4)
+                .background(selectedTrack == track ? Color.blue.opacity(0.2) : Color.clear) // Highlight selected track
+                .cornerRadius(4)
+                .contentShape(Rectangle()) // Ensures full row is tappable
+                .onTapGesture {
+                    // Single-click to select the track
+                    selectedTrack = track
+                    print("Selecting \(track.title)")
+                }
+                .simultaneousGesture(
+                    TapGesture(count: 2).onEnded {
+                        // Double-click to play the track
+                        print("Double-click, try to play \(track.title)")
+                        selectedTrack = track
+                        PlaybackManager.shared.play(track: track)
+                    }
+                )
             }
         }
         .padding()
