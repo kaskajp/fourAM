@@ -10,6 +10,14 @@ import SwiftData
 
 @main
 struct fourAMApp: App {
+    init() {
+        if let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            print("App Support Path: \(appSupportURL.path)")
+        } else {
+            print("No Application Support directory found.")
+        }
+    }
+    
     var body: some Scene {
         WindowGroup {
             ContentView()

@@ -10,6 +10,7 @@ import AppKit
 
 struct AlbumsView: View {
     @ObservedObject var libraryViewModel: LibraryViewModel
+    @Environment(\.modelContext) private var modelContext  // we need this to delete from SwiftData
 
     // A simple adaptive grid
     let columns = [
@@ -20,7 +21,6 @@ struct AlbumsView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(libraryViewModel.allAlbums()) { album in
-                    // Wrap your album UI in a NavigationLink
                     NavigationLink(destination: AlbumDetailView(album: album)) {
                         VStack {
                             // Show cover art or a placeholder
@@ -46,11 +46,68 @@ struct AlbumsView: View {
                                 .lineLimit(1)
                                 .multilineTextAlignment(.center)
                         }
+                        // 1) Add a contextMenu modifier on the entire VStack
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                // 2) Call deleteAlbum in your LibraryViewModel
+                                libraryViewModel.deleteAlbum(album, context: modelContext)
+                            } label: {
+                                Text("Remove from Library")
+                            }
+                            
+                            Button("Show in Finder") {
+                                showAlbumInFinder(album)
+                            }
+                        }
                     }
                 }
             }
             .padding()
         }
         .navigationTitle("Albums")
+    }
+    
+    func findTopLevelFolder(for filePath: String) -> String? {
+        // Suppose you have a list of stored top-level folder paths
+        let allTopLevelFolders = BookmarkManager.allStoredFolderPaths()
+        // Return the path that `filePath` starts with, if any
+        return allTopLevelFolders.first { filePath.hasPrefix($0) }
+    }
+    
+    // MARK: - Helper: Open the album folder in Finder
+    private func showAlbumInFinder(_ album: Album) {
+        guard let firstTrack = album.tracks.first else { return }
+        let fullTrackPath = firstTrack.path  // e.g. "/Users/jonas/Music/FolderA/SubFolder/Album/track.mp3"
+
+        let topLevelFolderPath = findTopLevelFolder(for: fullTrackPath)
+        
+        // Identify which top-level folder this belongs to
+        guard let topLevelFolderPath = findTopLevelFolder(for: fullTrackPath),
+              let resolvedFolder = BookmarkManager.resolveBookmark(for: topLevelFolderPath) else {
+            print("No bookmark or can't resolve for \(String(describing: topLevelFolderPath))")
+            return
+        }
+
+        // Start accessing the security scope
+        guard resolvedFolder.startAccessingSecurityScopedResource() else {
+            print("Could not start security scope for \(resolvedFolder.path)")
+            return
+        }
+        defer { resolvedFolder.stopAccessingSecurityScopedResource() }
+
+        // 4) Build the subfolder path (relative to topLevelFolderPath)
+        let relativeSubPath = fullTrackPath.dropFirst(topLevelFolderPath.count)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        // Now "relativeSubPath" might be "SubFolder/Album/track.mp3"
+
+        // 5) Create the subfolder's URL from the resolved top-level URL
+        let subfolderURL = resolvedFolder.appendingPathComponent(relativeSubPath, isDirectory: false)
+        // If you want just the album folder, remove the filename:
+        // let albumFolderURL = subfolderURL.deletingLastPathComponent()
+
+        // 6) Open that subfolder (or the album folder) in Finder
+        NSWorkspace.shared.open(subfolderURL.deletingLastPathComponent())
+        // or highlight the exact file:
+        // NSWorkspace.shared.activateFileViewerSelecting([subfolderURL])
     }
 }

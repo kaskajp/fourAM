@@ -58,6 +58,16 @@ struct ContentView: View {
                         libraryViewModel.fetchTracks(context: modelContext)
                     }
                 }
+                
+                // Show scanning progress in the toolbar
+                ToolbarItem {
+                    if libraryViewModel.isScanning {
+                        ProgressView(value: libraryViewModel.progress, total: 1.0)
+                            .frame(width: 100)
+                    } else {
+                        EmptyView()
+                    }
+                }
             }
         } detail: {
             Text("Select an item (or track)")
@@ -75,10 +85,17 @@ struct ContentView: View {
         panel.allowsMultipleSelection = false
 
         if panel.runModal() == .OK, let selectedFolder = panel.url {
+            do {
+                // Save the folder as a security-scoped bookmark
+                try BookmarkManager.storeBookmark(for: selectedFolder)
+            } catch {
+                print("Failed to store bookmark: \(error)")
+            }
+            
             // Use the libraryViewModel to scan & insert tracks into SwiftData
             libraryViewModel.loadLibrary(folderPath: selectedFolder.path, context: modelContext)
             // Optionally fetch again afterwards
-            libraryViewModel.fetchTracks(context: modelContext)
+            // libraryViewModel.fetchTracks(context: modelContext)
         }
     }
 }
