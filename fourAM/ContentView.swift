@@ -26,57 +26,52 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                // 2. Music library section
-                Section("Library") {
-                    // 1) Artists
-                    NavigationLink("Artists") {
-                        ArtistsView(libraryViewModel: libraryViewModel)
-                    }
-                    // 2) Albums
-                    NavigationLink("Albums") {
-                        AlbumsView(libraryViewModel: libraryViewModel)
-                    }
-                    // 3) Tracks
-                    NavigationLink("Tracks") {
-                        TracksView(libraryViewModel: libraryViewModel)
-                    }
-                }
-            }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-            .toolbar {
-                // 5. New "Add Folder" button for scanning music
-                ToolbarItem {
-                    Button(action: pickFolder) {
-                        Label("Add Folder", systemImage: "folder.badge.plus")
-                    }
-                }
-                ToolbarItem {
-                    // Button to fetch & display the saved tracks
-                    Button("Fetch Saved Tracks", systemImage: "folder.badge.minus") {
-                        libraryViewModel.fetchTracks(context: modelContext)
-                    }
-                }
-                
-                // Show scanning progress in the toolbar
-                ToolbarItem {
+        VStack(spacing: 0) { // Ensures no gap between the navigation view and the playback controls
+            NavigationSplitView {
+                List {
+                    // Processing Section
                     if libraryViewModel.isScanning {
-                        ProgressView(value: libraryViewModel.progress, total: 1.0)
-                            .frame(width: 100)
-                    } else {
-                        EmptyView()
+                        Section("Processing") {
+                            VStack(alignment: .leading) {
+                                Text(libraryViewModel.currentPhase)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                ProgressView(value: libraryViewModel.progress, total: 1.0)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    
+                    Section("Library") {
+                        NavigationLink("Artists") {
+                            ArtistsView(libraryViewModel: libraryViewModel)
+                        }
+                        NavigationLink("Albums") {
+                            AlbumsView(libraryViewModel: libraryViewModel)
+                        }
+                        NavigationLink("Tracks") {
+                            TracksView(libraryViewModel: libraryViewModel)
+                        }
                     }
                 }
+                .toolbar {
+                    ToolbarItem {
+                        Button(action: pickFolder) {
+                            Label("Add Folder", systemImage: "folder.badge.plus")
+                        }
+                    }
+                }
+            } detail: {
+                Text("Select an item")
+                    .padding()
             }
-            // Playback Controls at the bottom
+
+            // Playback controls spanning across the bottom of the window
             PlaybackControlsView()
-        } detail: {
-            Text("Select an item (or track)")
-                .padding()
+                .frame(maxWidth: .infinity) // Ensures it spans the full width of the window
         }
-        .onAppear() {
-            // Fetch saved tracks when the view appears
+        .onAppear {
             libraryViewModel.fetchTracks(context: modelContext)
         }
     }
@@ -103,28 +98,58 @@ struct ContentView: View {
                 }
                 defer { selectedFolder.stopAccessingSecurityScopedResource() }
 
-                // Dynamically resolve files within the folder
-                let fileManager = FileManager.default
-                let enumerator = fileManager.enumerator(
-                    at: selectedFolder,
-                    includingPropertiesForKeys: nil,
-                    options: [.skipsHiddenFiles, .skipsPackageDescendants]
-                )
+                // Perform scanning on a background queue
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let fileManager = FileManager.default
+                    let enumerator = fileManager.enumerator(
+                        at: selectedFolder,
+                        includingPropertiesForKeys: nil,
+                        options: [.skipsHiddenFiles, .skipsPackageDescendants]
+                    )
 
-                for fileURL in enumerator?.compactMap({ $0 as? URL }) ?? [] {
-                    // Check if the file is an audio file
-                    if fileURL.pathExtension.lowercased() == "mp3" ||
-                       fileURL.pathExtension.lowercased() == "m4a" ||
-                       fileURL.pathExtension.lowercased() == "flac" {
-                        // Store a bookmark for each audio file
-                        try BookmarkManager.storeBookmark(for: fileURL)
-                        print("Stored bookmark for file: \(fileURL.path)")
+                    // Collect all files to determine progress
+                    let allFiles = (enumerator?.compactMap { $0 as? URL } ?? []).filter { url in
+                        ["mp3", "m4a", "flac"].contains(url.pathExtension.lowercased())
+                    }
+                    let totalFiles = allFiles.count
+
+                    if totalFiles == 0 {
+                        DispatchQueue.main.async {
+                            libraryViewModel.progress = 1.0
+                            libraryViewModel.isScanning = false
+                            print("No audio files found.")
+                        }
+                        return
+                    }
+
+                    DispatchQueue.main.async {
+                        libraryViewModel.isScanning = true
+                    }
+                    var processedFiles = 0
+
+                    // Process each file and update progress
+                    for fileURL in allFiles {
+                        do {
+                            try BookmarkManager.storeBookmark(for: fileURL)
+                            processedFiles += 1
+
+                            // Update progress on the main thread
+                            DispatchQueue.main.async {
+                                libraryViewModel.progress = Double(processedFiles) / Double(totalFiles)
+                            }
+                        } catch {
+                            print("Error storing bookmark for \(fileURL.path): \(error)")
+                        }
+                    }
+
+                    // Scanning complete, update UI
+                    DispatchQueue.main.async {
+                        libraryViewModel.isScanning = false
+                        libraryViewModel.progress = 1.0 // Ensure progress bar shows 100%
+                        print("Scanning complete. Found \(totalFiles) audio files.")
+                        libraryViewModel.loadLibrary(folderPath: selectedFolder.path, context: modelContext)
                     }
                 }
-
-                // Use the libraryViewModel to scan & insert tracks into SwiftData
-                libraryViewModel.loadLibrary(folderPath: selectedFolder.path, context: modelContext)
-
             } catch {
                 print("Error processing folder: \(error)")
             }

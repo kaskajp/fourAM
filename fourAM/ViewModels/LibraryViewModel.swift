@@ -13,6 +13,7 @@ class LibraryViewModel: ObservableObject {
     
     /// Keep track of scanning progress (0.0–1.0)
     @Published var progress: Double = 0.0
+    @Published var currentPhase: String = "Scanning files..."
     
     /// Indicates whether we’re currently scanning
     @Published var isScanning: Bool = false
@@ -55,53 +56,86 @@ class LibraryViewModel: ObservableObject {
     func loadLibrary(folderPath: String, context: ModelContext) {
         isScanning = true
         progress = 0.0
+        currentPhase = "Scanning files..."
 
-        FileScanner.scanLibraryAsync(
-            folderPath: folderPath,
-            progressHandler: { newProgress in
-                // This closure is dispatched on the main thread by FileScanner
-                self.progress = newProgress
-            },
-            completion: { files in
-                // Now we have our array of [URL] after scanning completes
-                for url in files {
-                    let audioFile = MetadataExtractor.extract(from: url)
-                    
-                    // Check if a track with this path already exists in SwiftData
-                    var descriptor = FetchDescriptor<Track>(
-                        predicate: #Predicate { $0.path == url.path }
-                    )
-                    descriptor.fetchLimit = 1
-                    
-                    let existingTrack = try? context.fetch(descriptor).first
-                    if existingTrack == nil {
-                        // Insert a new Track
-                        let newTrack = Track(
-                            path: url.path,
-                            title: audioFile.title,
-                            artist: audioFile.artist,
-                            album: audioFile.album,
-                            artwork: audioFile.artwork,
-                            trackNumber: audioFile.trackNumber,
-                            durationString: audioFile.durationString
-                        )
-                        context.insert(newTrack)
+        // Allow the UI to update before starting the scanning process
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            FileScanner.scanLibraryAsync(
+                folderPath: folderPath,
+                progressHandler: { newProgress in
+                    // Update progress during file scanning (50% max)
+                    DispatchQueue.main.async {
+                        self.progress = newProgress // Scanning contributes to the first phase
+                    }
+                },
+                completion: { files in
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        let totalFiles = files.count
+                        var processedFiles = 0
+                        var newTracks: [Track] = [] // Collect new tracks in memory
+
+                        // Transition to the "Processing files..." phase
+                        DispatchQueue.main.async {
+                            self.currentPhase = "Processing files..."
+                            self.progress = 0.0 // Reset progress to 0
+                        }
+
+                        // Process files (metadata extraction + checking for duplicates)
+                        for url in files {
+                            let audioFile = MetadataExtractor.extract(from: url)
+
+                            // Check if a track with this path already exists in SwiftData
+                            var descriptor = FetchDescriptor<Track>(
+                                predicate: #Predicate { $0.path == url.path }
+                            )
+                            descriptor.fetchLimit = 1
+
+                            let existingTrack = try? context.fetch(descriptor).first
+                            if existingTrack == nil {
+                                // Prepare a new Track instance
+                                let newTrack = Track(
+                                    path: url.path,
+                                    title: audioFile.title,
+                                    artist: audioFile.artist,
+                                    album: audioFile.album,
+                                    artwork: audioFile.artwork,
+                                    trackNumber: audioFile.trackNumber,
+                                    durationString: audioFile.durationString
+                                )
+                                newTracks.append(newTrack)
+                            }
+
+                            // Update progress (metadata extraction is now the second phase)
+                            processedFiles += 1
+                            DispatchQueue.main.async {
+                                self.progress = Double(processedFiles) / Double(totalFiles)
+                            }
+                        }
+
+                        // Insert all new tracks into SwiftData in a single batch
+                        DispatchQueue.main.async {
+                            do {
+                                for track in newTracks {
+                                    context.insert(track)
+                                }
+                                try context.save()
+
+                                // Refresh in-memory tracks on the main thread
+                                self.fetchTracks(context: context)
+                                print("Successfully saved \(newTracks.count) new tracks to SwiftData.")
+                            } catch {
+                                print("Error saving tracks to SwiftData: \(error)")
+                            }
+
+                            // Mark scanning as finished
+                            self.progress = 1.0 // Ensure progress reaches 100%
+                            self.currentPhase = "" // Clear phase label
+                            self.isScanning = false
+                        }
                     }
                 }
-                
-                // Save all new tracks and refresh our in-memory list
-                do {
-                    try context.save()
-                    self.fetchTracks(context: context)
-                    print("Successfully saved tracks to SwiftData, \(files.count) files")
-                } catch {
-                    print("Error saving tracks to SwiftData: \(error)")
-                }
-                
-                // Mark the scanning operation as finished
-                self.isScanning = false
-            }
-        )
+            )
+        }
     }
     
     /// Fetch all tracks from SwiftData into our in-memory `tracks` array.
