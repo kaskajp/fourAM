@@ -38,7 +38,7 @@ class LibraryViewModel: ObservableObject {
             try context.save()
             
             // 3) Refresh local in-memory array
-            self.fetchTracks(context: context)
+            self.tracks = LibraryHelper.fetchTracks(from: context)
             
             print("Deleted album '\(album.name)' and its tracks from SwiftData.")
         } catch {
@@ -121,7 +121,7 @@ class LibraryViewModel: ObservableObject {
                                 try context.save()
 
                                 // Refresh in-memory tracks on the main thread
-                                self.fetchTracks(context: context)
+                                self.tracks = LibraryHelper.fetchTracks(from: context)
                                 print("Successfully saved \(newTracks.count) new tracks to SwiftData.")
                             } catch {
                                 print("Error saving tracks to SwiftData: \(error)")
@@ -138,16 +138,9 @@ class LibraryViewModel: ObservableObject {
         }
     }
     
-    /// Fetch all tracks from SwiftData into our in-memory `tracks` array.
-    func fetchTracks(context: ModelContext) {
-        do {
-            let request = FetchDescriptor<Track>()
-            let results = try context.fetch(request)
-            self.tracks = results
-        } catch {
-            print("Error fetching tracks: \(error)")
-            self.tracks = []
-        }
+    func refreshTracks(context: ModelContext) {
+        self.tracks = LibraryHelper.fetchTracks(from: context)
+        print("Tracks refreshed. Count: \(self.tracks.count)")
     }
     
     /// Return all albums for a particular artist, grouped by album name.
@@ -158,6 +151,7 @@ class LibraryViewModel: ObservableObject {
         return grouped.map { (albumName, albumTracks) in
             Album(
                 name: albumName,
+                albumArtist: albumTracks.first?.albumArtist,
                 artwork: albumTracks.first?.artwork,
                 tracks: albumTracks
             )
@@ -172,7 +166,7 @@ class LibraryViewModel: ObservableObject {
 
         for (albumName, albumTracks) in grouped {
             let coverArt = albumTracks.first?.artwork
-            albums.append(Album(name: albumName, artwork: coverArt, tracks: albumTracks))
+            albums.append(Album(name: albumName, albumArtist: albumTracks.first?.albumArtist, artwork: coverArt, tracks: albumTracks))
         }
 
         return albums.sorted { $0.name < $1.name }

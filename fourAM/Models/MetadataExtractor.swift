@@ -14,6 +14,7 @@ struct MetadataExtractor {
         // Default metadata
         var title = url.lastPathComponent
         var artist = "Unknown Artist"
+        var albumArtist = "Unknown Album Artist"
         var album = "Unknown Album"
         var artwork: Data?
         
@@ -22,7 +23,7 @@ struct MetadataExtractor {
         let durationSeconds = CMTimeGetSeconds(asset.duration)
         let durationString = formatTime(durationSeconds)
         
-        // 1. Parse common metadata for title, artist, album, artwork
+        // 1. Parse common metadata for title, artist, albumArtist, album, artwork
         for item in asset.commonMetadata {
             guard let commonKey = item.commonKey?.rawValue else { continue }
             switch commonKey {
@@ -30,6 +31,8 @@ struct MetadataExtractor {
                 if let val = item.value as? String { title = val }
             case "artist":
                 if let val = item.value as? String { artist = val }
+            case "albumArtist":
+                if let val = item.value as? String { albumArtist = val }
             case "albumName":
                 if let val = item.value as? String { album = val }
             case "artwork":
@@ -59,6 +62,7 @@ struct MetadataExtractor {
             url: url,
             title: title,
             artist: artist,
+            albumArtist: albumArtist,
             album: album,
             artwork: artwork,
             trackNumber: trackNumber,

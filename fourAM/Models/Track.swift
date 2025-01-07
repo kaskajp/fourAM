@@ -14,16 +14,17 @@ class Track {
     var title: String
     var artist: String
     var album: String
+    var albumArtist: String? // New property
     var artwork: Data?
     var trackNumber: Int
     var durationString: String
-    
-    // SwiftData requires an initializer if you want custom logic or defaults
+
     init(
         path: String,
         title: String,
         artist: String,
         album: String,
+        albumArtist: String? = nil, // Default value
         artwork: Data? = nil,
         trackNumber: Int = -1,
         durationString: String = "0:00"
@@ -32,6 +33,7 @@ class Track {
         self.title = title
         self.artist = artist
         self.album = album
+        self.albumArtist = albumArtist
         self.artwork = artwork
         self.trackNumber = trackNumber
         self.durationString = durationString

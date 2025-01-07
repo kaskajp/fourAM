@@ -8,6 +8,9 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var libraryViewModel: LibraryViewModel // Access ViewModel globally
+    
     var body: some View {
         TabView {
             GeneralSettingsView()
@@ -15,7 +18,7 @@ struct SettingsView: View {
                     Label("General", systemImage: "gear")
                 }
             
-            LibrarySettingsView()
+            LibrarySettingsView(modelContext: modelContext)
                 .tabItem {
                     Label("Library", systemImage: "folder")
                 }

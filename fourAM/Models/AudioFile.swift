@@ -12,6 +12,7 @@ struct AudioFile: Identifiable {
     let url: URL
     let title: String
     let artist: String
+    let albumArtist: String
     let album: String
     let artwork: Data?
     let trackNumber: Int

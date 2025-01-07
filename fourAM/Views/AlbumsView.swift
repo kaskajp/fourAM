@@ -11,45 +11,51 @@ import AppKit
 struct AlbumsView: View {
     @ObservedObject var libraryViewModel: LibraryViewModel
     @Environment(\.modelContext) private var modelContext  // we need this to delete from SwiftData
-
-    // A simple adaptive grid
-    let columns = [
-        GridItem(.adaptive(minimum: 120), spacing: 16)
-    ]
+    
+    // Persistent setting for cover image size
+    @AppStorage("coverImageSize") private var coverImageSize: Double = 120.0 // Default size
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 16) {
+            // Adaptive grid based on cover image size
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: coverImageSize), spacing: 16)],
+                spacing: 16
+            ) {
                 ForEach(libraryViewModel.allAlbums()) { album in
                     NavigationLink(destination: AlbumDetailView(album: album)) {
-                        VStack {
+                        VStack(alignment: .leading) {
                             // Show cover art or a placeholder
                             if let data = album.artwork,
                                let nsImage = NSImage(data: data) {
                                 Image(nsImage: nsImage)
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
-                                    .frame(width: 120, height: 120)
+                                    .frame(width: coverImageSize, height: coverImageSize)
                                     .cornerRadius(4)
                                     .clipped()
                             } else {
                                 Rectangle()
-                                    .fill(Color.gray.opacity(0))
-                                    .frame(width: 120, height: 120)
+                                    .fill(Color.gray.opacity(0.5))
+                                    .frame(width: coverImageSize, height: coverImageSize)
                                     .cornerRadius(4)
                             }
-                            
-                            // Album name
+
+                            // Artist name label
+                            Text(album.albumArtist)
+                                .font(.caption)
+                                .lineLimit(1)
+                                .padding(.top, 4)
+
+                            // Album name label
                             Text(album.name)
                                 .font(.headline)
-                                .frame(maxWidth: 120)
                                 .lineLimit(1)
-                                .multilineTextAlignment(.center)
                         }
-                        // 1) Add a contextMenu modifier on the entire VStack
+                        .frame(width: coverImageSize)
                         .contextMenu {
                             Button(role: .destructive) {
-                                // 2) Call deleteAlbum in your LibraryViewModel
+                                // Call deleteAlbum in your LibraryViewModel
                                 libraryViewModel.deleteAlbum(album, context: modelContext)
                             } label: {
                                 Text("Remove from Library")
@@ -62,7 +68,6 @@ struct AlbumsView: View {
                     }
                 }
             }
-            .padding()
         }
         .navigationTitle("Albums")
     }

@@ -72,7 +72,7 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity) // Ensures it spans the full width of the window
         }
         .onAppear {
-            libraryViewModel.fetchTracks(context: modelContext)
+            libraryViewModel.tracks = LibraryHelper.fetchTracks(from: modelContext)
         }
     }
 
