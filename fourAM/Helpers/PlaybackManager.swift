@@ -10,11 +10,16 @@ import AVFoundation
 
 class PlaybackManager: ObservableObject {
     static let shared = PlaybackManager()
+    private var audioPlayer: AVAudioPlayer?
 
     @Published var currentTrack: Track? // Currently playing track
     @Published var isPlaying: Bool = false // Playback state
+    @Published var currentTime: Double = 0 // Current playback time in seconds
+    var trackDuration: Double? {
+        audioPlayer?.duration
+    }
 
-    private var audioPlayer: AVAudioPlayer?
+    private var timer: Timer?
 
     private init() {}
 
@@ -40,6 +45,7 @@ class PlaybackManager: ObservableObject {
                 audioPlayer?.play()
                 currentTrack = track
                 isPlaying = true
+                startTimer()
             } catch {
                 print("Failed to play track: \(error)")
             }
@@ -63,5 +69,31 @@ class PlaybackManager: ObservableObject {
         audioPlayer = nil
         currentTrack = nil
         isPlaying = false
+    }
+    
+    func seek(to time: Double) {
+        audioPlayer?.currentTime = time
+        currentTime = time
+    }
+    
+    private func startTimer() {
+        stopTimer()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            if let player = self.audioPlayer {
+                self.currentTime = player.currentTime
+            }
+        }
+    }
+
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    func formattedTime(for time: Double) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 }

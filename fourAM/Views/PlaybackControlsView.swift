@@ -31,6 +31,37 @@ struct PlaybackControlsView: View {
                 }
 
                 Spacer()
+                
+                // Scrubber
+                if let duration = playbackManager.trackDuration, duration > 0 {
+                    VStack {
+                        Slider(
+                            value: $playbackManager.currentTime,
+                            in: 0...duration,
+                            onEditingChanged: { isEditing in
+                                if isEditing {
+                                    playbackManager.pause()
+                                } else {
+                                    playbackManager.seek(to: playbackManager.currentTime)
+                                    playbackManager.resume()
+                                }
+                            }
+                        )
+                        .accentColor(.blue) // Adjust scrubber color as needed
+
+                        // Time Labels
+                        HStack {
+                            Text(playbackManager.formattedTime(for: playbackManager.currentTime))
+                                .font(.caption)
+                            Spacer()
+                            Text(playbackManager.formattedTime(for: duration))
+                                .font(.caption)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+                
+                Spacer()
 
                 // Playback Controls
                 HStack {
