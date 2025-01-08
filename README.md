@@ -1,4 +1,4 @@
-# 4:00 AM macOS Music Player
+# fourAM macOS Music Player
 
 A native macOS music player for local music libraries.
 
