@@ -14,7 +14,13 @@ class PlaybackManager: ObservableObject {
 
     @Published var currentTrack: Track? // Currently playing track
     @Published var isPlaying: Bool = false // Playback state
+    @Published var isShuffleEnabled = false
+    @Published var isRepeatEnabled = false
     @Published var currentTime: Double = 0 // Current playback time in seconds
+    
+    var library: [Track] = [] // Array of tracks representing the music library
+    private var currentIndex: Int? // Index of the currently playing track
+    
     var trackDuration: Double? {
         audioPlayer?.duration
     }
@@ -46,6 +52,7 @@ class PlaybackManager: ObservableObject {
                 currentTrack = track
                 isPlaying = true
                 startTimer()
+                currentTrack = track
             } catch {
                 print("Failed to play track: \(error)")
             }
@@ -95,5 +102,43 @@ class PlaybackManager: ObservableObject {
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+    
+    func nextTrack() {
+        guard let index = currentIndex else { return }
+        if isShuffleEnabled {
+            currentIndex = Int.random(in: 0..<library.count)
+        } else {
+            currentIndex = (index + 1) % library.count
+        }
+        if let currentIndex = currentIndex {
+            play(track: library[currentIndex])
+        }
+    }
+
+    func previousTrack() {
+        guard let index = currentIndex else { return }
+        currentIndex = (index - 1 + library.count) % library.count
+        if let currentIndex = currentIndex {
+            play(track: library[currentIndex])
+        }
+    }
+
+    func toggleShuffle() {
+        isShuffleEnabled.toggle()
+    }
+
+    func toggleRepeat() {
+        isRepeatEnabled.toggle()
+    }
+    
+    func setLibrary(_ tracks: [Track]) {
+        library = tracks
+    }
+
+    func startPlayingLibrary(from index: Int) {
+        guard index < library.count else { return }
+        currentIndex = index
+        play(track: library[index])
     }
 }

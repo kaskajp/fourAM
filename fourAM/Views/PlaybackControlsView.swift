@@ -65,6 +65,24 @@ struct PlaybackControlsView: View {
 
                 // Playback Controls
                 HStack {
+                    // Shuffle Button
+                    Button(action: {
+                        playbackManager.toggleShuffle()
+                    }) {
+                        Image(systemName: playbackManager.isShuffleEnabled ? "shuffle.circle.fill" : "shuffle.circle")
+                            .font(.title2)
+                            .foregroundColor(playbackManager.isShuffleEnabled ? .blue : .primary)
+                    }
+
+                    // Previous Button
+                    Button(action: {
+                        playbackManager.previousTrack()
+                    }) {
+                        Image(systemName: "backward.fill")
+                            .font(.title2)
+                    }
+
+                    // Play/Pause Button
                     Button(action: {
                         if playbackManager.isPlaying {
                             playbackManager.pause()
@@ -76,11 +94,29 @@ struct PlaybackControlsView: View {
                             .font(.title2)
                     }
 
+                    // Stop Button
                     Button(action: {
                         playbackManager.stop()
                     }) {
                         Image(systemName: "stop.fill")
                             .font(.title2)
+                    }
+                    
+                    // Next Button
+                    Button(action: {
+                        playbackManager.nextTrack()
+                    }) {
+                        Image(systemName: "forward.fill")
+                            .font(.title2)
+                    }
+
+                    // Repeat Button
+                    Button(action: {
+                        playbackManager.toggleRepeat()
+                    }) {
+                        Image(systemName: playbackManager.isRepeatEnabled ? "repeat.circle.fill" : "repeat.circle")
+                            .font(.title2)
+                            .foregroundColor(playbackManager.isRepeatEnabled ? .blue : .primary)
                     }
                 }
             }
