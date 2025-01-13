@@ -9,7 +9,7 @@ import Foundation
 import AVFoundation
 import SwiftUI
 
-class PlaybackManager: ObservableObject {
+class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let shared = PlaybackManager()
     private var audioPlayer: AVAudioPlayer?
     
@@ -30,10 +30,6 @@ class PlaybackManager: ObservableObject {
 
     private var timer: Timer?
 
-    private init() {
-        // libraryViewModel = LibraryViewModel()
-    }
-
     // MARK: - Playback Controls
 
     func play(track: Track) {
@@ -53,6 +49,7 @@ class PlaybackManager: ObservableObject {
             // Attempt to play the file
             do {
                 audioPlayer = try AVAudioPlayer(contentsOf: resolvedURL)
+                audioPlayer?.delegate = self
                 audioPlayer?.play()
                 
                 // Update the current index
@@ -109,6 +106,15 @@ class PlaybackManager: ObservableObject {
     func seek(to time: Double) {
         audioPlayer?.currentTime = time
         currentTime = time
+    }
+    
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        if flag {
+            print("Track finished playing. Moving to the next track.")
+            nextTrack()
+        } else {
+            print("Playback finished unsuccessfully.")
+        }
     }
     
     private func startTimer() {
