@@ -11,6 +11,8 @@ import SwiftData
 @main
 struct fourAMApp: App {
     @ObservedObject var libraryViewModel = LibraryViewModel.shared
+    @ObservedObject private var playbackManager = PlaybackManager.shared
+    private let globalKeyEventHandler = GlobalKeyEventHandler()
     
     init() {
         if let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
@@ -18,6 +20,9 @@ struct fourAMApp: App {
         } else {
             print("No Application Support directory found.")
         }
+        
+        // Initialize global key event handler
+        globalKeyEventHandler.setup(playbackManager: playbackManager)
     }
     
     var body: some Scene {
@@ -33,6 +38,18 @@ struct fourAMApp: App {
                 .environmentObject(libraryViewModel)
                 .modelContainer(for: [Track.self])
         }
+    }
+    
+    private func handleGlobalKeyEvent(_ event: NSEvent, playbackManager: PlaybackManager) -> NSEvent? {
+        if event.characters == " " {
+            if playbackManager.isPlaying {
+                playbackManager.pause()
+            } else {
+                playbackManager.resume()
+            }
+            return nil // Swallow the event
+        }
+        return event // Pass the event to the system
     }
 }
 
