@@ -20,7 +20,6 @@ struct Album: Identifiable {
         self.name = name
         self.albumArtist = albumArtist ?? "Unknown Album Artist"
         self.artwork = artwork
-        // Sort by trackNumber at creation time
-        self.tracks = tracks.sorted(by: { $0.trackNumber < $1.trackNumber })
+        self.tracks = tracks
     }
 }

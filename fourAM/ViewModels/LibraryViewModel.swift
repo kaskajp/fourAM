@@ -9,14 +9,13 @@ import SwiftUI
 import SwiftData
 
 class LibraryViewModel: ObservableObject {
+    static let shared = LibraryViewModel() // Singleton instance
     @Published var tracks: [Track] = []
-    
-    /// Keep track of scanning progress (0.0–1.0)
+    @Published var isScanning: Bool = false
     @Published var progress: Double = 0.0
     @Published var currentPhase: String = "Scanning files..."
     
-    /// Indicates whether we’re currently scanning
-    @Published var isScanning: Bool = false
+    private init() {}
     
     func deleteAlbum(_ album: Album, context: ModelContext) {
         // 1) For each track in this album, remove it from SwiftData
@@ -85,19 +84,19 @@ class LibraryViewModel: ObservableObject {
                             let audioFile = MetadataExtractor.extract(from: url)
 
                             // Check if a track with this path already exists in SwiftData
-                            var descriptor = FetchDescriptor<Track>(
-                                predicate: #Predicate { $0.path == url.path }
-                            )
+                            var descriptor = FetchDescriptor<Track>()
                             descriptor.fetchLimit = 1
 
                             let existingTrack = try? context.fetch(descriptor).first
                             if existingTrack == nil {
-                                // Prepare a new Track instance
+                                print("New track disc number: \(audioFile.discNumber)")
                                 let newTrack = Track(
                                     path: url.path,
+                                    url: url,
                                     title: audioFile.title,
                                     artist: audioFile.artist,
                                     album: audioFile.album,
+                                    discNumber: audioFile.discNumber,
                                     artwork: audioFile.artwork,
                                     trackNumber: audioFile.trackNumber,
                                     durationString: audioFile.durationString

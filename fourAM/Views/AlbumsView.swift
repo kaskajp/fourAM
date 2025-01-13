@@ -9,7 +9,7 @@ import SwiftUI
 import AppKit
 
 struct AlbumsView: View {
-    @ObservedObject var libraryViewModel: LibraryViewModel
+    @ObservedObject var libraryViewModel = LibraryViewModel.shared
     @Environment(\.modelContext) private var modelContext  // we need this to delete from SwiftData
     
     // Persistent setting for cover image size

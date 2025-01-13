@@ -12,7 +12,7 @@ class AudioPlayer: ObservableObject {
 
     @Published var isPlaying = false
 
-    func play(file: AudioFile) {
+    func play(file: Track) {
         do {
             player = try AVAudioPlayer(contentsOf: file.url)
             player?.play()
