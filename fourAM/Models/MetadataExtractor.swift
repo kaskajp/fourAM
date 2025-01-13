@@ -8,7 +8,7 @@
 import AVFoundation
 
 struct MetadataExtractor {
-    static func extract(from url: URL) -> AudioFile {
+    static func extract(from url: URL) -> Track {
         let asset = AVAsset(url: url)
         
         // Default metadata
@@ -17,8 +17,7 @@ struct MetadataExtractor {
         var albumArtist = "Unknown Album Artist"
         var album = "Unknown Album"
         var artwork: Data?
-        
-        // Prepare track number and duration fallback
+        var discNumber = -1
         var trackNumber = -1
         let durationSeconds = CMTimeGetSeconds(asset.duration)
         let durationString = formatTime(durationSeconds)
@@ -42,10 +41,6 @@ struct MetadataExtractor {
             }
         }
         
-        // 2. Attempt to parse track number from iTunes/ID3 metadata
-        //    (optional if you want to try deeper metadata scanning)
-        //    This code tries "trackNumber" from iTunes format if available:
-        
         for format in asset.availableMetadataFormats {
             let metadataItems = asset.metadata(forFormat: format)
             for item in metadataItems {
@@ -53,17 +48,21 @@ struct MetadataExtractor {
                 if let identifier = item.identifier?.rawValue {
                     if identifier.contains("trackNumber") || identifier.contains("TRCK") {
                         trackNumber = parseTrackNumber(from: item)
+                    } else if identifier.contains("discNumber") || identifier.contains("TPOS") {
+                        discNumber = parseDiscNumber(from: item)
                     }
                 }
             }
         }
         
-        return AudioFile(
+        return Track(
+            path: url.path,
             url: url,
             title: title,
             artist: artist,
-            albumArtist: albumArtist,
             album: album,
+            discNumber: discNumber,
+            albumArtist: albumArtist,
             artwork: artwork,
             trackNumber: trackNumber,
             durationString: durationString
@@ -88,6 +87,20 @@ struct MetadataExtractor {
         // If it's a string
         if let str = item.stringValue {
             // Handle "01", "1", or "1/12"
+            let parts = str.split(separator: "/")
+            if let firstPart = parts.first, let val = Int(firstPart) {
+                return val
+            }
+        }
+        return -1
+    }
+    
+    /// Parse disc number from metadata
+    private static func parseDiscNumber(from item: AVMetadataItem) -> Int {
+        if let val = item.value as? Int {
+            return val
+        }
+        if let str = item.stringValue {
             let parts = str.split(separator: "/")
             if let firstPart = parts.first, let val = Int(firstPart) {
                 return val

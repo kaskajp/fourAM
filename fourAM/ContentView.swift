@@ -13,7 +13,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var items: [Item]
 
-    @StateObject private var libraryViewModel = LibraryViewModel()
+    @StateObject private var libraryViewModel = LibraryViewModel.shared
     
     // Group audio files by artist
     private var artistsDictionary: [String: [Track]] {
@@ -73,6 +73,7 @@ struct ContentView: View {
         }
         .onAppear {
             libraryViewModel.tracks = LibraryHelper.fetchTracks(from: modelContext)
+            print("Library loaded on appear with \(libraryViewModel.tracks.count) tracks")
         }
     }
 

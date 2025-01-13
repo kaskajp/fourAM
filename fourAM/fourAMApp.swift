@@ -10,7 +10,7 @@ import SwiftData
 
 @main
 struct fourAMApp: App {
-    @StateObject private var libraryViewModel = LibraryViewModel() // Shared ViewModel
+    @ObservedObject var libraryViewModel = LibraryViewModel.shared
     
     init() {
         if let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
