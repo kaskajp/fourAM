@@ -14,6 +14,7 @@ struct ContentView: View {
     @Query private var items: [Item]
 
     @StateObject private var libraryViewModel = LibraryViewModel.shared
+    @ObservedObject var playbackManager = PlaybackManager.shared
     
     // Group audio files by artist
     private var artistsDictionary: [String: [Track]] {
