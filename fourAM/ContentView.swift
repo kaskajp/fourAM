@@ -63,6 +63,7 @@ struct ContentView: View {
                         }
                     }
                 }
+                .frame(minWidth: 180) 
             } detail: {
                 Text("Select an item")
                     .padding()
