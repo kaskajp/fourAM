@@ -89,7 +89,7 @@ class LibraryViewModel: ObservableObject {
 
                             let existingTrack = try? context.fetch(descriptor).first
                             if existingTrack == nil {
-                                print("New track disc number: \(audioFile.discNumber)")
+                                // print("New track disc number: \(audioFile.discNumber)")
                                 let newTrack = Track(
                                     path: url.path,
                                     url: url,
@@ -97,6 +97,7 @@ class LibraryViewModel: ObservableObject {
                                     artist: audioFile.artist,
                                     album: audioFile.album,
                                     discNumber: audioFile.discNumber,
+                                    albumArtist: audioFile.albumArtist,
                                     artwork: audioFile.artwork,
                                     trackNumber: audioFile.trackNumber,
                                     durationString: audioFile.durationString

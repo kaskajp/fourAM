@@ -30,8 +30,6 @@ struct MetadataExtractor {
                 if let val = item.value as? String { title = val }
             case "artist":
                 if let val = item.value as? String { artist = val }
-            case "albumArtist":
-                if let val = item.value as? String { albumArtist = val }
             case "albumName":
                 if let val = item.value as? String { album = val }
             case "artwork":
@@ -44,12 +42,17 @@ struct MetadataExtractor {
         for format in asset.availableMetadataFormats {
             let metadataItems = asset.metadata(forFormat: format)
             for item in metadataItems {
+                /*if let key = item.key as? String, let value = item.value {
+                    print("Format: \(format), Key: \(key), Value: \(value)")
+                }*/
                 // Look at item.identifier or item.key to see how track # is stored
                 if let identifier = item.identifier?.rawValue {
                     if identifier.contains("trackNumber") || identifier.contains("TRCK") {
                         trackNumber = parseTrackNumber(from: item)
                     } else if identifier.contains("discNumber") || identifier.contains("TPOS") {
                         discNumber = parseDiscNumber(from: item)
+                    } else if identifier.contains("TPE2") {
+                        albumArtist = item.value as? String ?? albumArtist
                     }
                 }
             }
