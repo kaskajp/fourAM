@@ -69,68 +69,70 @@ class LibraryViewModel: ObservableObject {
                 },
                 completion: { files in
                     DispatchQueue.global(qos: .userInitiated).async {
-                        let totalFiles = files.count
-                        var processedFiles = 0
-                        var newTracks: [Track] = [] // Collect new tracks in memory
-
-                        // Transition to the "Processing files..." phase
-                        DispatchQueue.main.async {
-                            self.currentPhase = "Processing files..."
-                            self.progress = 0.0 // Reset progress to 0
-                        }
-
-                        // Process files (metadata extraction + checking for duplicates)
-                        for url in files {
-                            let audioFile = MetadataExtractor.extract(from: url)
-
-                            // Check if a track with this path already exists in SwiftData
-                            var descriptor = FetchDescriptor<Track>()
-                            descriptor.fetchLimit = 1
-
-                            let existingTrack = try? context.fetch(descriptor).first
-                            if existingTrack == nil {
-                                // print("New track disc number: \(audioFile.discNumber)")
-                                let newTrack = Track(
-                                    path: url.path,
-                                    url: url,
-                                    title: audioFile.title,
-                                    artist: audioFile.artist,
-                                    album: audioFile.album,
-                                    discNumber: audioFile.discNumber,
-                                    albumArtist: audioFile.albumArtist,
-                                    artwork: audioFile.artwork,
-                                    trackNumber: audioFile.trackNumber,
-                                    durationString: audioFile.durationString
-                                )
-                                newTracks.append(newTrack)
-                            }
-
-                            // Update progress (metadata extraction is now the second phase)
-                            processedFiles += 1
+                        Task {
+                            let totalFiles = files.count
+                            var processedFiles = 0
+                            var newTracks: [Track] = [] // Collect new tracks in memory
+                            
+                            // Transition to the "Processing files..." phase
                             DispatchQueue.main.async {
-                                self.progress = Double(processedFiles) / Double(totalFiles)
+                                self.currentPhase = "Processing files..."
+                                self.progress = 0.0 // Reset progress to 0
                             }
-                        }
-
-                        // Insert all new tracks into SwiftData in a single batch
-                        DispatchQueue.main.async {
-                            do {
-                                for track in newTracks {
-                                    context.insert(track)
+                            
+                            // Process files (metadata extraction + checking for duplicates)
+                            for url in files {
+                                let audioFile = try await MetadataExtractor.extract(from: url)
+                                
+                                // Check if a track with this path already exists in SwiftData
+                                var descriptor = FetchDescriptor<Track>()
+                                descriptor.fetchLimit = 1
+                                
+                                let existingTrack = try? context.fetch(descriptor).first
+                                if existingTrack == nil {
+                                    // print("New track disc number: \(audioFile.discNumber)")
+                                    let newTrack = Track(
+                                        path: url.path,
+                                        url: url,
+                                        title: audioFile.title,
+                                        artist: audioFile.artist,
+                                        album: audioFile.album,
+                                        discNumber: audioFile.discNumber,
+                                        albumArtist: audioFile.albumArtist,
+                                        artwork: audioFile.artwork,
+                                        trackNumber: audioFile.trackNumber,
+                                        durationString: audioFile.durationString
+                                    )
+                                    newTracks.append(newTrack)
                                 }
-                                try context.save()
-
-                                // Refresh in-memory tracks on the main thread
-                                self.tracks = LibraryHelper.fetchTracks(from: context)
-                                print("Successfully saved \(newTracks.count) new tracks to SwiftData.")
-                            } catch {
-                                print("Error saving tracks to SwiftData: \(error)")
+                                
+                                // Update progress (metadata extraction is now the second phase)
+                                processedFiles += 1
+                                DispatchQueue.main.async {
+                                    self.progress = Double(processedFiles) / Double(totalFiles)
+                                }
                             }
-
-                            // Mark scanning as finished
-                            self.progress = 1.0 // Ensure progress reaches 100%
-                            self.currentPhase = "" // Clear phase label
-                            self.isScanning = false
+                            
+                            // Insert all new tracks into SwiftData in a single batch
+                            DispatchQueue.main.async {
+                                do {
+                                    for track in newTracks {
+                                        context.insert(track)
+                                    }
+                                    try context.save()
+                                    
+                                    // Refresh in-memory tracks on the main thread
+                                    self.tracks = LibraryHelper.fetchTracks(from: context)
+                                    print("Successfully saved \(newTracks.count) new tracks to SwiftData.")
+                                } catch {
+                                    print("Error saving tracks to SwiftData: \(error)")
+                                }
+                                
+                                // Mark scanning as finished
+                                self.progress = 1.0 // Ensure progress reaches 100%
+                                self.currentPhase = "" // Clear phase label
+                                self.isScanning = false
+                            }
                         }
                     }
                 }

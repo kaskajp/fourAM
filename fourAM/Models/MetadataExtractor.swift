@@ -8,7 +8,7 @@
 import AVFoundation
 
 struct MetadataExtractor {
-    static func extract(from url: URL) -> Track {
+    static func extract(from url: URL) async throws -> Track {
         let asset = AVAsset(url: url)
         
         // Default metadata
@@ -19,28 +19,28 @@ struct MetadataExtractor {
         var artwork: Data?
         var discNumber = -1
         var trackNumber = -1
-        let durationSeconds = CMTimeGetSeconds(asset.duration)
+        let durationSeconds = try await CMTimeGetSeconds(asset.load(.duration))
         let durationString = formatTime(durationSeconds)
         
         // 1. Parse common metadata for title, artist, albumArtist, album, artwork
-        for item in asset.commonMetadata {
+        for item in try await asset.load(.commonMetadata) {
             guard let commonKey = item.commonKey?.rawValue else { continue }
             switch commonKey {
             case "title":
-                if let val = item.value as? String { title = val }
+                if let val = try await item.load(.value) as? String { title = val }
             case "artist":
-                if let val = item.value as? String { artist = val }
+                if let val = try await item.load(.value) as? String { artist = val }
             case "albumName":
-                if let val = item.value as? String { album = val }
+                if let val = try await item.load(.value) as? String { album = val }
             case "artwork":
-                if let data = item.value as? Data { artwork = data }
+                if let data = try await item.load(.value) as? Data { artwork = data }
             default:
                 break
             }
         }
         
-        for format in asset.availableMetadataFormats {
-            let metadataItems = asset.metadata(forFormat: format)
+        for format in try await asset.load(.availableMetadataFormats) {
+            let metadataItems = try await asset.loadMetadata(for: format)
             for item in metadataItems {
                 /*if let key = item.key as? String, let value = item.value {
                     print("Format: \(format), Key: \(key), Value: \(value)")
@@ -48,11 +48,11 @@ struct MetadataExtractor {
                 // Look at item.identifier or item.key to see how track # is stored
                 if let identifier = item.identifier?.rawValue {
                     if identifier.contains("trackNumber") || identifier.contains("TRCK") {
-                        trackNumber = parseTrackNumber(from: item)
+                        trackNumber = try await parseTrackNumber(from: item)
                     } else if identifier.contains("discNumber") || identifier.contains("TPOS") {
-                        discNumber = parseDiscNumber(from: item)
+                        discNumber = try await parseDiscNumber(from: item)
                     } else if identifier.contains("TPE2") {
-                        albumArtist = item.value as? String ?? albumArtist
+                        albumArtist = try await item.load(.value) as? String ?? albumArtist
                     }
                 }
             }
@@ -82,13 +82,13 @@ struct MetadataExtractor {
     }
     
     // Where parseTrackNumber could handle string or int values:
-    private static func parseTrackNumber(from item: AVMetadataItem) -> Int {
+    private static func parseTrackNumber(from item: AVMetadataItem) async throws -> Int {
         // If it's directly an Int
-        if let val = item.value as? Int {
+        if let val = try await item.load(.value) as? Int {
             return val
         }
         // If it's a string
-        if let str = item.stringValue {
+        if let str = try await item.load(.stringValue) {
             // Handle "01", "1", or "1/12"
             let parts = str.split(separator: "/")
             if let firstPart = parts.first, let val = Int(firstPart) {
@@ -99,11 +99,11 @@ struct MetadataExtractor {
     }
     
     /// Parse disc number from metadata
-    private static func parseDiscNumber(from item: AVMetadataItem) -> Int {
-        if let val = item.value as? Int {
+    private static func parseDiscNumber(from item: AVMetadataItem) async throws -> Int {
+        if let val = try await item.load(.value) as? Int {
             return val
         }
-        if let str = item.stringValue {
+        if let str = try await item.load(.stringValue) {
             let parts = str.split(separator: "/")
             if let firstPart = parts.first, let val = Int(firstPart) {
                 return val
