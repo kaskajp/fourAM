@@ -10,6 +10,7 @@ import AppKit
 
 struct AlbumsView: View {
     @ObservedObject var libraryViewModel = LibraryViewModel.shared
+    var onAlbumSelected: ((Album) -> Void)? = nil
     @Environment(\.modelContext) private var modelContext  // we need this to delete from SwiftData
     
     // Persistent setting for cover image size
@@ -23,7 +24,9 @@ struct AlbumsView: View {
                 spacing: 16
             ) {
                 ForEach(libraryViewModel.allAlbums()) { album in
-                    NavigationLink(destination: AlbumDetailView(album: album)) {
+                    Button(action: {
+                        onAlbumSelected?(album) // Call the closure when an album is selected
+                    }) {
                         VStack(alignment: .leading) {
                             // Show cover art or a placeholder
                             if let data = album.artwork,

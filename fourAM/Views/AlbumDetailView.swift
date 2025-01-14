@@ -10,17 +10,41 @@ import AppKit
 
 struct AlbumDetailView: View {
     let album: Album
-        
+    let onBack: () -> Void // Closure to handle the back button action
+
+    @Environment(\.dismiss) var dismiss // Replace presentationMode with dismiss
+    @State private var searchText: String = "" // To manage the search input
     @State private var selectedTrack: Track? // Track currently selected
 
     var body: some View {
+        // Group and sort tracks
         let groupedTracks = Dictionary(grouping: album.tracks) { $0.discNumber ?? 1 }
         let sortedDiscs = groupedTracks.keys.sorted()
-
-        // Debug grouping logic outside of the ViewBuilder
-        // debugGroupedTracks(groupedTracks)
+        let filteredTracks = album.tracks.filter { track in
+            searchText.isEmpty || track.title.lowercased().contains(searchText.lowercased())
+        }
+        let filteredGroupedTracks = Dictionary(grouping: filteredTracks) { $0.discNumber ?? 1 }
+        let filteredSortedDiscs = filteredGroupedTracks.keys.sorted()
 
         return VStack(alignment: .leading) {
+            // Top bar
+            HStack(alignment: .center) {
+                Button(action: onBack) { // Call the provided back action
+                    Image(systemName: "chevron.left")
+                        .font(.title2)
+                        .foregroundColor(.primary)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Spacer()
+
+                TextField("Filter", text: $searchText)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .frame(maxWidth: 200)
+            }
+            .padding(.bottom, 10)
+            .zIndex(1)
+
             // Album header (cover + album title)
             HStack(spacing: 8) {
                 if let data = album.artwork,
@@ -45,9 +69,9 @@ struct AlbumDetailView: View {
 
             // Track list grouped by disc
             List {
-                ForEach(sortedDiscs, id: \.self) { disc in
+                ForEach(filteredSortedDiscs, id: \.self) { disc in
                     Section(header: Text("Disc \(disc)").font(.headline)) {
-                        ForEach(groupedTracks[disc]!.sorted(by: { lhs, rhs in
+                        ForEach(filteredGroupedTracks[disc]!.sorted(by: { lhs, rhs in
                             lhs.trackNumber < rhs.trackNumber
                         }), id: \.id) { track in
                             HStack {
@@ -87,16 +111,6 @@ struct AlbumDetailView: View {
             }
         }
         .padding()
-        .navigationTitle(album.name) // or just .navigationTitle("Album Details")
-    }
-
-    private func debugGroupedTracks(_ groupedTracks: [Int: [Track]]) {
-        print("Grouped Tracks:")
-        for (disc, tracks) in groupedTracks {
-            print("Disc \(disc):")
-            for track in tracks {
-                print("  - \(track.trackNumber): \(track.title)")
-            }
-        }
+        .navigationTitle(album.name) // Optional: Keep or remove this
     }
 }

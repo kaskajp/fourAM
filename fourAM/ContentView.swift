@@ -16,6 +16,9 @@ struct ContentView: View {
     @StateObject private var libraryViewModel = LibraryViewModel.shared
     @ObservedObject var playbackManager = PlaybackManager.shared
     
+    @State private var selectedView: String? = nil
+    @State private var selectedAlbum: Album? = nil
+    
     // Group audio files by artist
     private var artistsDictionary: [String: [Track]] {
         Dictionary(grouping: libraryViewModel.tracks, by: \.artist)
@@ -29,7 +32,7 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) { // Ensures no gap between the navigation view and the playback controls
             NavigationSplitView {
-                List {
+                List(selection: $selectedView) {
                     // Processing Section
                     if libraryViewModel.isScanning {
                         Section("Processing") {
@@ -45,14 +48,14 @@ struct ContentView: View {
                     }
                     
                     Section("Library") {
-                        NavigationLink("Artists") {
-                            ArtistsView(libraryViewModel: libraryViewModel)
+                        NavigationLink(value: "ArtistsView") {
+                            Text("Artists")
                         }
-                        NavigationLink("Albums") {
-                            AlbumsView(libraryViewModel: libraryViewModel)
+                        NavigationLink(value: "AlbumsView") {
+                            Text("Albums")
                         }
-                        NavigationLink("Tracks") {
-                            TracksView(libraryViewModel: libraryViewModel)
+                        NavigationLink(value: "TracksView") {
+                            Text("Tracks")
                         }
                     }
                 }
@@ -65,8 +68,23 @@ struct ContentView: View {
                 }
                 .frame(minWidth: 180) 
             } detail: {
-                Text("Select an item")
-                    .padding()
+                if selectedView == "AlbumsView" {
+                    AlbumsView(libraryViewModel: libraryViewModel, onAlbumSelected: { album in
+                        selectedAlbum = album
+                        selectedView = "AlbumDetailView"
+                    })
+                } else if selectedView == "AlbumDetailView", let album = selectedAlbum {
+                    AlbumDetailView(album: album) {
+                        selectedView = "AlbumsView" // Navigate back to AlbumsView
+                    }
+                } else if selectedView == "ArtistsView" {
+                    ArtistsView(libraryViewModel: libraryViewModel)
+                } else if selectedView == "TracksView" {
+                    TracksView(libraryViewModel: libraryViewModel)
+                } else {
+                    Text("Select an item")
+                        .padding()
+                }
             }
 
             // Playback controls spanning across the bottom of the window
