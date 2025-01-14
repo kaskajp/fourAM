@@ -30,6 +30,7 @@ struct fourAMApp: App {
             ContentView()
                 .environmentObject(libraryViewModel) // Provide ViewModel to ContentView
                 .modelContainer(for: [Track.self])
+                .frame(minWidth: 800, minHeight: 400)
         }
         
         // Add the settings scene
