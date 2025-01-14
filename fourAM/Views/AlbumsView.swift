@@ -33,7 +33,7 @@ struct AlbumsView: View {
                                let nsImage = NSImage(data: data) {
                                 Image(nsImage: nsImage)
                                     .resizable()
-                                    .aspectRatio(contentMode: .fill)
+                                    .scaledToFill()
                                     .frame(width: coverImageSize, height: coverImageSize)
                                     .cornerRadius(4)
                                     .clipped()
@@ -69,8 +69,10 @@ struct AlbumsView: View {
                             }
                         }
                     }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
+            .padding()
         }
         .navigationTitle("Albums")
     }
