@@ -18,7 +18,7 @@ struct AlbumDetailView: View {
         let sortedDiscs = groupedTracks.keys.sorted()
 
         // Debug grouping logic outside of the ViewBuilder
-        debugGroupedTracks(groupedTracks)
+        // debugGroupedTracks(groupedTracks)
 
         return VStack(alignment: .leading) {
             // Album header (cover + album title)
