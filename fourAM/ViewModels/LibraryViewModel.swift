@@ -85,7 +85,9 @@ class LibraryViewModel: ObservableObject {
                                 let audioFile = try await MetadataExtractor.extract(from: url)
                                 
                                 // Check if a track with this path already exists in SwiftData
-                                var descriptor = FetchDescriptor<Track>()
+                                var descriptor = FetchDescriptor<Track>(
+                                    predicate: #Predicate { $0.path == url.path }
+                                )
                                 descriptor.fetchLimit = 1
                                 
                                 let existingTrack = try? context.fetch(descriptor).first
