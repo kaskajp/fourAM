@@ -73,7 +73,7 @@ class LibraryViewModel: ObservableObject {
                             let totalFiles = files.count
                             var processedFiles = 0
                             let fileProcessingUpdateInterval = 10 // Only update the UI every 50 processed files
-                            let semaphore = AsyncSemaphore(limit: 2) // Limit to 2 concurrent tasks
+                            let semaphore = AsyncSemaphore(limit: 1) // Limit to 2 concurrent tasks
                             var newTracks: [Track] = []
                             
                             let existingPaths = Set(try context.fetch(FetchDescriptor<Track>()).map { $0.path })
@@ -84,6 +84,8 @@ class LibraryViewModel: ObservableObject {
                             }
                             
                             await withTaskGroup(of: Track?.self) { group in
+                                let thumbnailCache = ThumbnailCache() // Use the actor for thread-safe access
+                                
                                 for url in files {
                                     group.addTask {
                                         // print("Waiting for semaphore: \(url.path)")
@@ -96,6 +98,16 @@ class LibraryViewModel: ObservableObject {
                                             let audioFile = try await MetadataExtractor.extract(from: url)
                                             
                                             if !existingPaths.contains(url.path) {
+                                                // Check if this album already has a thumbnail
+                                                if await thumbnailCache.getThumbnail(for: audioFile.album) == nil,
+                                                   let artwork = audioFile.artwork {
+                                                    if let thumbnail = self.createThumbnail(from: artwork, maxDimension: 300) {
+                                                        await thumbnailCache.setThumbnail(thumbnail, for: audioFile.album)
+                                                    } else {
+                                                        print("Thumbnail generation failed for album: \(audioFile.album)")
+                                                    }
+                                                }
+                                                
                                                 return Track(
                                                     path: url.path,
                                                     url: url,
@@ -105,6 +117,7 @@ class LibraryViewModel: ObservableObject {
                                                     discNumber: audioFile.discNumber,
                                                     albumArtist: audioFile.albumArtist,
                                                     artwork: audioFile.artwork,
+                                                    thumbnail: await thumbnailCache.getThumbnail(for: audioFile.album),
                                                     trackNumber: audioFile.trackNumber,
                                                     durationString: audioFile.durationString
                                                 )
@@ -159,6 +172,35 @@ class LibraryViewModel: ObservableObject {
         }
     }
     
+    private func createThumbnail(from data: Data, maxDimension: CGFloat) -> Data? {
+        print("Creating thumbnail...")
+        guard let image = NSImage(data: data) else {
+            print("Invalid image data for thumbnail creation.")
+            return nil
+        }
+        
+        let targetSize = NSSize(width: maxDimension, height: maxDimension)
+        let resizedImage = NSImage(size: targetSize)
+        
+        resizedImage.lockFocus()
+        image.draw(
+            in: NSRect(origin: .zero, size: targetSize),
+            from: NSRect(origin: .zero, size: image.size),
+            operation: .copy,
+            fraction: 1.0
+        )
+        resizedImage.unlockFocus()
+        
+        guard let imageData = resizedImage.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: imageData),
+              let compressedData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else {
+            print("Failed to create thumbnail image data.")
+            return nil
+        }
+        
+        return compressedData
+    }
+    
     func refreshTracks(context: ModelContext) {
         self.tracks = LibraryHelper.fetchTracks(from: context)
         print("Tracks refreshed. Count: \(self.tracks.count)")
@@ -174,6 +216,7 @@ class LibraryViewModel: ObservableObject {
                 name: albumName,
                 albumArtist: albumTracks.first?.albumArtist,
                 artwork: albumTracks.first?.artwork,
+                thumbnail: albumTracks.first?.thumbnail,
                 tracks: albumTracks
             )
         }
@@ -187,7 +230,8 @@ class LibraryViewModel: ObservableObject {
 
         for (albumName, albumTracks) in grouped {
             let coverArt = albumTracks.first?.artwork
-            albums.append(Album(name: albumName, albumArtist: albumTracks.first?.albumArtist, artwork: coverArt, tracks: albumTracks))
+            let thumbnail = albumTracks.first?.thumbnail
+            albums.append(Album(name: albumName, albumArtist: albumTracks.first?.albumArtist, artwork: coverArt, thumbnail: thumbnail, tracks: albumTracks))
         }
 
         return albums.sorted { $0.name < $1.name }
