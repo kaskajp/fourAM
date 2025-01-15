@@ -70,41 +70,13 @@ struct AlbumDetailView: View {
             // Track list grouped by disc
             List {
                 ForEach(filteredSortedDiscs, id: \.self) { disc in
-                    Section(header: Text("Disc \(disc)").font(.headline)) {
-                        ForEach(filteredGroupedTracks[disc]!.sorted(by: { lhs, rhs in
-                            lhs.trackNumber < rhs.trackNumber
-                        }), id: \.id) { track in
-                            HStack {
-                                // Track number on the left
-                                Text("\(track.trackNumber)")
-                                    .frame(width: 30, alignment: .leading)
-
-                                // Track title in the center
-                                Text(track.title)
-                                    .font(.headline)
-
-                                Spacer()
-
-                                // Duration on the right
-                                Text(track.durationString)
+                    Group {
+                        if filteredGroupedTracks.keys.count > 1 {
+                            Section(header: Text("Disc \(disc)").font(.headline)) {
+                                trackList(for: disc, tracks: filteredGroupedTracks[disc]!)
                             }
-                            .padding(4)
-                            .background(selectedTrack == track ? Color.blue.opacity(0.2) : Color.clear) // Highlight selected track
-                            .cornerRadius(4)
-                            .contentShape(Rectangle()) // Ensures full row is tappable
-                            .onTapGesture {
-                                // Single-click to select the track
-                                selectedTrack = track
-                                print("Selecting \(track.title)")
-                            }
-                            .simultaneousGesture(
-                                TapGesture(count: 2).onEnded {
-                                    // Double-click to play the track
-                                    print("Double-click, try to play \(track.title)")
-                                    selectedTrack = track
-                                    PlaybackManager.shared.play(track: track)
-                                }
-                            )
+                        } else {
+                            trackList(for: disc, tracks: filteredGroupedTracks[disc]!)
                         }
                     }
                 }
@@ -112,5 +84,44 @@ struct AlbumDetailView: View {
         }
         .padding()
         .navigationTitle(album.name) // Optional: Keep or remove this
+    }
+    
+    @ViewBuilder
+    private func trackList(for disc: Int, tracks: [Track]) -> some View {
+        ForEach(tracks.sorted(by: { lhs, rhs in
+            lhs.trackNumber < rhs.trackNumber
+        }), id: \.id) { track in
+            HStack {
+                // Track number on the left
+                Text("\(track.trackNumber)")
+                    .frame(width: 30, alignment: .leading)
+
+                // Track title in the center
+                Text(track.title)
+                    .font(.headline)
+
+                Spacer()
+
+                // Duration on the right
+                Text(track.durationString)
+            }
+            .padding(4)
+            .background(selectedTrack == track ? Color.blue.opacity(0.2) : Color.clear) // Highlight selected track
+            .cornerRadius(4)
+            .contentShape(Rectangle()) // Ensures full row is tappable
+            .onTapGesture {
+                // Single-click to select the track
+                selectedTrack = track
+                print("Selecting \(track.title)")
+            }
+            .simultaneousGesture(
+                TapGesture(count: 2).onEnded {
+                    // Double-click to play the track
+                    print("Double-click, try to play \(track.title)")
+                    selectedTrack = track
+                    PlaybackManager.shared.play(track: track)
+                }
+            )
+        }
     }
 }
