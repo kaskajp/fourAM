@@ -22,38 +22,30 @@ struct MetadataExtractor {
         let durationSeconds = try await CMTimeGetSeconds(asset.load(.duration))
         let durationString = formatTime(durationSeconds)
         
-        // 1. Parse common metadata for title, artist, albumArtist, album, artwork
-        for item in try await asset.load(.commonMetadata) {
-            guard let commonKey = item.commonKey?.rawValue else { continue }
-            switch commonKey {
-            case "title":
-                if let val = try await item.load(.value) as? String { title = val }
-            case "artist":
-                if let val = try await item.load(.value) as? String { artist = val }
-            case "albumName":
-                if let val = try await item.load(.value) as? String { album = val }
-            case "artwork":
-                if let data = try await item.load(.value) as? Data { artwork = data }
-            default:
-                break
-            }
-        }
+        // Batch-load common metadata to avoid redundant awaits
+        let commonMetadata = try await asset.load(.commonMetadata)
+        let metadataValues = try await loadMetadataValues(from: commonMetadata)
+        title = metadataValues["title"] as? String ?? title
+        artist = metadataValues["artist"] as? String ?? artist
+        album = metadataValues["albumName"] as? String ?? album
+        artwork = metadataValues["artwork"] as? Data ?? artwork
         
-        for format in try await asset.load(.availableMetadataFormats) {
+        // Batch-load available formats and metadata items
+        let availableFormats = try await asset.load(.availableMetadataFormats)
+        for format in availableFormats {
             let metadataItems = try await asset.loadMetadata(for: format)
             for item in metadataItems {
-                /*if let key = item.key as? String, let value = item.value {
-                    print("Format: \(format), Key: \(key), Value: \(value)")
-                }*/
-                // Look at item.identifier or item.key to see how track # is stored
-                if let identifier = item.identifier?.rawValue {
-                    if identifier.contains("trackNumber") || identifier.contains("TRCK") {
-                        trackNumber = try await parseTrackNumber(from: item)
-                    } else if identifier.contains("discNumber") || identifier.contains("TPOS") {
-                        discNumber = try await parseDiscNumber(from: item)
-                    } else if identifier.contains("TPE2") {
-                        albumArtist = try await item.load(.value) as? String ?? albumArtist
-                    }
+                guard let identifier = item.identifier?.rawValue else { continue }
+
+                switch identifier {
+                case let id where id.contains("trackNumber") || id.contains("TRCK"):
+                    trackNumber = try await parseTrackNumber(from: item)
+                case let id where id.contains("discNumber") || id.contains("TPOS"):
+                    discNumber = try await parseDiscNumber(from: item)
+                case let id where id.contains("TPE2"):
+                    albumArtist = try await item.load(.value) as? String ?? albumArtist
+                default:
+                    break
                 }
             }
         }
@@ -70,6 +62,26 @@ struct MetadataExtractor {
             trackNumber: trackNumber,
             durationString: durationString
         )
+    }
+    
+    private static func loadMetadataValues(from items: [AVMetadataItem]) async throws -> [String: Any] {
+        var result: [String: Any] = [:]
+
+        try await withThrowingTaskGroup(of: (String, Any?).self) { group in
+            for item in items {
+                guard let commonKey = item.commonKey?.rawValue else { continue }
+                group.addTask {
+                    let value = try? await item.load(.value)
+                    return (commonKey, value)
+                }
+            }
+            for try await (key, value) in group {
+                if let value = value {
+                    result[key] = value
+                }
+            }
+        }
+        return result
     }
     
     /// Helper to produce a "mm:ss" string from track duration
