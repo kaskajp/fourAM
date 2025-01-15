@@ -19,6 +19,7 @@ class Track: Equatable {
     var discNumber: Int
     var albumArtist: String? // New property
     var artwork: Data?
+    var thumbnail: Data? // Resized artwork
     var trackNumber: Int
     var durationString: String
 
@@ -31,6 +32,7 @@ class Track: Equatable {
         discNumber: Int = -1,
         albumArtist: String? = nil, // Default value
         artwork: Data? = nil,
+        thumbnail: Data? = nil,
         trackNumber: Int = -1,
         durationString: String = "0:00"
     ) {
@@ -42,6 +44,7 @@ class Track: Equatable {
         self.discNumber = discNumber
         self.albumArtist = albumArtist
         self.artwork = artwork
+        self.thumbnail = thumbnail
         self.trackNumber = trackNumber
         self.durationString = durationString
     }

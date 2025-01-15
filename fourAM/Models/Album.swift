@@ -14,12 +14,14 @@ struct Album: Identifiable {
     let name: String
     let albumArtist: String
     let artwork: Data? // optional if album art might not exist
+    let thumbnail: Data?
     let tracks: [Track]
     
-    init(name: String, albumArtist: String?, artwork: Data?, tracks: [Track]) {
+    init(name: String, albumArtist: String?, artwork: Data?, thumbnail: Data?, tracks: [Track]) {
         self.name = name
         self.albumArtist = albumArtist ?? "Unknown Album Artist"
         self.artwork = artwork
+        self.thumbnail = thumbnail
         self.tracks = tracks
     }
 }
