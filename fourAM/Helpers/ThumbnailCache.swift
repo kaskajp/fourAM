@@ -33,4 +33,8 @@ actor ThumbnailCache {
             pending[album] = continuation
         }
     }
+    
+    func clear() {
+        cache.removeAll()
+    }
 }
