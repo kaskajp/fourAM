@@ -23,30 +23,46 @@ struct MetadataExtractor {
         let durationSeconds = try await CMTimeGetSeconds(asset.load(.duration))
         let durationString = formatTime(durationSeconds)
         
-        // Batch-load common metadata to avoid redundant awaits
-        let commonMetadata = try await asset.load(.commonMetadata)
-        let metadataValues = try await loadMetadataValues(from: commonMetadata)
-        title = metadataValues["title"] as? String ?? title
-        artist = metadataValues["artist"] as? String ?? artist
-        album = metadataValues["albumName"] as? String ?? album
-        artwork = metadataValues["artwork"] as? Data ?? artwork
-        
-        // Batch-load available formats and metadata items
-        let availableFormats = try await asset.load(.availableMetadataFormats)
-        for format in availableFormats {
-            let metadataItems = try await asset.loadMetadata(for: format)
-            for item in metadataItems {
-                guard let identifier = item.identifier?.rawValue else { continue }
-
-                switch identifier {
-                case let id where id.contains("trackNumber") || id.contains("TRCK"):
-                    trackNumber = try await parseTrackNumber(from: item)
-                case let id where id.contains("discNumber") || id.contains("TPOS"):
-                    discNumber = try await parseDiscNumber(from: item)
-                case let id where id.contains("TPE2"):
-                    albumArtist = try await item.load(.value) as? String ?? albumArtist
-                default:
-                    break
+        // Check for FLAC-specific metadata
+        if url.pathExtension.lowercased() == "flac" {
+            // Use TagLibWrapper to extract metadata for FLAC files
+            let flacMetadata = TagLibWrapper.extractMetadata(from: url)
+            
+            title = flacMetadata["title"] as? String ?? title
+            artist = flacMetadata["artist"] as? String ?? artist
+            albumArtist = flacMetadata["album artist"] as? String ?? albumArtist
+            album = flacMetadata["album"] as? String ?? album
+            trackNumber = flacMetadata["track number"] as? Int ?? trackNumber
+            discNumber = flacMetadata["disc number"] as? Int ?? discNumber
+            if let artworkData = flacMetadata["artwork"] as? Data {
+                artwork = artworkData
+            }
+        } else {
+            // Batch-load common metadata to avoid redundant awaits
+            let commonMetadata = try await asset.load(.commonMetadata)
+            let metadataValues = try await loadMetadataValues(from: commonMetadata)
+            title = metadataValues["title"] as? String ?? title
+            artist = metadataValues["artist"] as? String ?? artist
+            album = metadataValues["albumName"] as? String ?? album
+            artwork = metadataValues["artwork"] as? Data ?? artwork
+            
+            // Batch-load available formats and metadata items
+            let availableFormats = try await asset.load(.availableMetadataFormats)
+            for format in availableFormats {
+                let metadataItems = try await asset.loadMetadata(for: format)
+                for item in metadataItems {
+                    guard let identifier = item.identifier?.rawValue else { continue }
+                    
+                    switch identifier {
+                    case let id where id.contains("trackNumber") || id.contains("TRCK"):
+                        trackNumber = try await parseTrackNumber(from: item)
+                    case let id where id.contains("discNumber") || id.contains("TPOS"):
+                        discNumber = try await parseDiscNumber(from: item)
+                    case let id where id.contains("TPE2"):
+                        albumArtist = try await item.load(.value) as? String ?? albumArtist
+                    default:
+                        break
+                    }
                 }
             }
         }

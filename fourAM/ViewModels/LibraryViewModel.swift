@@ -88,7 +88,6 @@ class LibraryViewModel: ObservableObject {
                                 
                                 for url in files {
                                     group.addTask {
-                                        // print("Waiting for semaphore: \(url.path)")
                                         await semaphore.wait() // Wait for an available slot
                                         defer {
                                             Task { await semaphore.signal() } // Release the slot asynchronously
@@ -98,13 +97,14 @@ class LibraryViewModel: ObservableObject {
                                             let audioFile = try await MetadataExtractor.extract(from: url)
                                             
                                             if !existingPaths.contains(url.path) {
-                                                // Check if this album already has a thumbnail
-                                                if await thumbnailCache.getThumbnail(for: audioFile.album) == nil,
-                                                   let artwork = audioFile.artwork {
-                                                    if let thumbnail = self.createThumbnail(from: artwork, maxDimension: 300) {
-                                                        await thumbnailCache.setThumbnail(thumbnail, for: audioFile.album)
-                                                    } else {
-                                                        print("Thumbnail generation failed for album: \(audioFile.album)")
+                                                if !audioFile.album.isEmpty {
+                                                    if await thumbnailCache.getThumbnail(for: audioFile.album) == nil,
+                                                       let artwork = audioFile.artwork {
+                                                        if let image = NSImage(data: artwork) {
+                                                            if let thumbnail = self.createThumbnail(from: artwork, maxDimension: 300) {
+                                                                await thumbnailCache.setThumbnail(thumbnail, for: audioFile.album)
+                                                            }
+                                                        }
                                                     }
                                                 }
                                                 
@@ -173,32 +173,32 @@ class LibraryViewModel: ObservableObject {
     }
     
     private func createThumbnail(from data: Data, maxDimension: CGFloat) -> Data? {
-        print("Creating thumbnail...")
-        guard let image = NSImage(data: data) else {
-            print("Invalid image data for thumbnail creation.")
+        // Create an image source from the data
+        guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil) else {
+            print("Failed to create CGImageSource from data.")
             return nil
         }
-        
-        let targetSize = NSSize(width: maxDimension, height: maxDimension)
-        let resizedImage = NSImage(size: targetSize)
-        
-        resizedImage.lockFocus()
-        image.draw(
-            in: NSRect(origin: .zero, size: targetSize),
-            from: NSRect(origin: .zero, size: image.size),
-            operation: .copy,
-            fraction: 1.0
-        )
-        resizedImage.unlockFocus()
-        
-        guard let imageData = resizedImage.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: imageData),
-              let compressedData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else {
-            print("Failed to create thumbnail image data.")
+
+        // Options for creating a thumbnail
+        let options: [CFString: Any] = [
+            kCGImageSourceThumbnailMaxPixelSize: maxDimension,
+            kCGImageSourceCreateThumbnailFromImageAlways: true
+        ]
+
+        // Generate the thumbnail
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else {
+            print("Failed to create thumbnail image.")
             return nil
         }
-        
-        return compressedData
+
+        // Convert CGImage to JPEG Data
+        let bitmapRep = NSBitmapImageRep(cgImage: cgImage)
+        guard let jpegData = bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else {
+            print("Failed to create JPEG representation from thumbnail image.")
+            return nil
+        }
+
+        return jpegData
     }
     
     func refreshTracks(context: ModelContext) {
