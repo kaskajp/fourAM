@@ -72,17 +72,18 @@ struct AlbumItemView: View {
                         .frame(width: coverImageSize, height: coverImageSize)
                         .cornerRadius(4)
                 }
+                
+                // Album name
+                Text(album.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .padding(.bottom, 0)
 
                 // Album artist
                 Text(album.albumArtist)
                     .font(.caption)
                     .lineLimit(1)
-                    .padding(.top, 4)
-
-                // Album name
-                Text(album.name)
-                    .font(.headline)
-                    .lineLimit(1)
+                    .foregroundColor(.secondary)
             }
             .frame(width: coverImageSize)
             .contextMenu {

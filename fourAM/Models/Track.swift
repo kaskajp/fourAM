@@ -17,11 +17,13 @@ class Track: Equatable {
     var artist: String
     var album: String
     var discNumber: Int
-    var albumArtist: String? // New property
+    var albumArtist: String?
     var artwork: Data?
-    var thumbnail: Data? // Resized artwork
+    var thumbnail: Data?
     var trackNumber: Int
     var durationString: String
+    var genre: String?
+    var releaseYear: Int
 
     init(
         path: String,
@@ -30,11 +32,13 @@ class Track: Equatable {
         artist: String,
         album: String,
         discNumber: Int = -1,
-        albumArtist: String? = nil, // Default value
+        albumArtist: String? = nil,
         artwork: Data? = nil,
         thumbnail: Data? = nil,
         trackNumber: Int = -1,
-        durationString: String = "0:00"
+        durationString: String = "0:00",
+        genre: String? = nil,
+        releaseYear: Int = 0
     ) {
         self.path = path
         self.url = url
@@ -47,6 +51,8 @@ class Track: Equatable {
         self.thumbnail = thumbnail
         self.trackNumber = trackNumber
         self.durationString = durationString
+        self.genre = genre
+        self.releaseYear = releaseYear
     }
     
     static func == (lhs: Track, rhs: Track) -> Bool {

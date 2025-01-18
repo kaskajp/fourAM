@@ -11,6 +11,7 @@ struct Metadata {
     const char* genre;
     int trackNumber;
     int discNumber;
+    int releaseYear;
     unsigned char* artwork;
     size_t artworkSize;
 };

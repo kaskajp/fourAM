@@ -20,8 +20,10 @@ struct MetadataExtractor {
         var artwork: Data?
         var discNumber = -1
         var trackNumber = -1
+        var releaseYear = 0
         let durationSeconds = try await CMTimeGetSeconds(asset.load(.duration))
         let durationString = formatTime(durationSeconds)
+        var genre = "Unknown Genre"
         
         // Check for FLAC-specific metadata
         if url.pathExtension.lowercased() == "flac" {
@@ -34,6 +36,7 @@ struct MetadataExtractor {
             album = flacMetadata["album"] as? String ?? album
             trackNumber = flacMetadata["track number"] as? Int ?? trackNumber
             discNumber = flacMetadata["disc number"] as? Int ?? discNumber
+            releaseYear = flacMetadata["releaseYear"] as? Int ?? releaseYear
             if let artworkData = flacMetadata["artwork"] as? Data {
                 artwork = artworkData
             }
@@ -45,6 +48,7 @@ struct MetadataExtractor {
             artist = metadataValues["artist"] as? String ?? artist
             album = metadataValues["albumName"] as? String ?? album
             artwork = metadataValues["artwork"] as? Data ?? artwork
+            releaseYear = metadataValues["year"] as? Int ?? releaseYear
             
             // Batch-load available formats and metadata items
             let availableFormats = try await asset.load(.availableMetadataFormats)
@@ -60,6 +64,22 @@ struct MetadataExtractor {
                         discNumber = try await parseDiscNumber(from: item)
                     case let id where id.contains("TPE2"):
                         albumArtist = try await item.load(.value) as? String ?? albumArtist
+                    case let id where id.contains("TCON"):
+                        if let rawValue = try await item.load(.value) {
+                            if let genreString = rawValue as? String {
+                                genre = genreString
+                            }
+                        }
+                    case let id where id.contains("TDRC"):
+                        if let rawValue = try await item.load(.value) {
+                            if let intValue = rawValue as? Int {
+                                releaseYear = intValue
+                            } else if let stringValue = rawValue as? String {
+                                if let year = Int(stringValue.prefix(4)) {
+                                    releaseYear = year
+                                }
+                            }
+                        }
                     default:
                         break
                     }
@@ -77,7 +97,9 @@ struct MetadataExtractor {
             albumArtist: albumArtist,
             artwork: artwork,
             trackNumber: trackNumber,
-            durationString: durationString
+            durationString: durationString,
+            genre: genre,
+            releaseYear: releaseYear
         )
     }
     

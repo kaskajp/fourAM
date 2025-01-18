@@ -119,7 +119,9 @@ class LibraryViewModel: ObservableObject {
                                                     artwork: audioFile.artwork,
                                                     thumbnail: await thumbnailCache.getThumbnail(for: audioFile.album),
                                                     trackNumber: audioFile.trackNumber,
-                                                    durationString: audioFile.durationString
+                                                    durationString: audioFile.durationString,
+                                                    genre: audioFile.genre,
+                                                    releaseYear: audioFile.releaseYear
                                                 )
                                             }
                                         } catch {
@@ -217,7 +219,9 @@ class LibraryViewModel: ObservableObject {
                 albumArtist: albumTracks.first?.albumArtist,
                 artwork: albumTracks.first?.artwork,
                 thumbnail: albumTracks.first?.thumbnail,
-                tracks: albumTracks
+                tracks: albumTracks,
+                releaseYear: albumTracks.first?.releaseYear ?? 0,
+                genre: albumTracks.first?.genre ?? ""
             )
         }
         .sorted { $0.name < $1.name }
@@ -231,7 +235,7 @@ class LibraryViewModel: ObservableObject {
         for (albumName, albumTracks) in grouped {
             let coverArt = albumTracks.first?.artwork
             let thumbnail = albumTracks.first?.thumbnail
-            albums.append(Album(name: albumName, albumArtist: albumTracks.first?.albumArtist, artwork: coverArt, thumbnail: thumbnail, tracks: albumTracks))
+            albums.append(Album(name: albumName, albumArtist: albumTracks.first?.albumArtist, artwork: coverArt, thumbnail: thumbnail, tracks: albumTracks, releaseYear: albumTracks.first?.releaseYear ?? 0, genre: albumTracks.first?.genre ?? ""))
         }
 
         return albums.sorted { $0.name < $1.name }

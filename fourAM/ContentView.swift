@@ -49,13 +49,25 @@ struct ContentView: View {
                     
                     Section("Library") {
                         NavigationLink(value: "ArtistsView") {
-                            Text("Artists")
+                            HStack(spacing: 4) {
+                                Image(systemName: "music.microphone")
+                                    .foregroundColor(.indigo)
+                                Text("Artists")
+                            }
                         }
                         NavigationLink(value: "AlbumsView") {
-                            Text("Albums")
+                            HStack(spacing: 4) {
+                                Image(systemName: "square.stack")
+                                    .foregroundColor(.indigo)
+                                Text("Albums")
+                            }
                         }
                         NavigationLink(value: "TracksView") {
-                            Text("Tracks")
+                            HStack(spacing: 4) {
+                                Image(systemName: "music.note.list")
+                                    .foregroundColor(.indigo)
+                                Text("Tracks")
+                            }
                         }
                     }
                 }

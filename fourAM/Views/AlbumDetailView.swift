@@ -25,6 +25,7 @@ struct AlbumDetailView: View {
         }
         let filteredGroupedTracks = Dictionary(grouping: filteredTracks) { $0.discNumber ?? 1 }
         let filteredSortedDiscs = filteredGroupedTracks.keys.sorted()
+        print(album)
 
         return VStack(alignment: .leading) {
             // Top bar
@@ -52,20 +53,50 @@ struct AlbumDetailView: View {
                     Image(nsImage: nsImage)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(width: 60, height: 60)
+                        .frame(width: 180, height: 180)
                         .cornerRadius(4)
                         .clipped()
                 } else {
                     Rectangle()
                         .fill(Color.gray.opacity(0.5))
-                        .frame(width: 60, height: 60)
+                        .frame(width: 180, height: 180)
                         .cornerRadius(4)
                 }
-                Text(album.name)
-                    .font(.title2)
-                    .fontWeight(.semibold)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(album.name)
+                        .font(.title)
+                        .fontWeight(.semibold)
+                    Text("\(album.albumArtist)")
+                    .padding(.bottom, 10)
+                    HStack(spacing: 4) {
+                        Text("\(String(format: "%d", album.releaseYear))")
+                        Text("·")
+                        Text("\(album.genre)")
+                        Text("·")
+                        Text("\(album.totalTracks) tracks")
+                    }
+                    .padding(.bottom, 10)
+                    Button(action: {
+                        playFirstTrack()
+                    }) {
+                        HStack {
+                            Image(systemName: "play.fill")
+                                .font(.headline)
+                            Text("Play")
+                                .font(.headline)
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+                        .foregroundColor(.white)
+                        .background(.indigo)
+                        .cornerRadius(50)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+                .padding()
             }
             .padding(.bottom, 8)
+            .padding(.horizontal, 8)
 
             // Track list grouped by disc
             List {
@@ -81,9 +112,21 @@ struct AlbumDetailView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.clear)
+            .listStyle(.plain) // Removes additional styling applied by default
+            .listRowInsets(EdgeInsets()) // Removes default insets for each row
+            .padding(.horizontal, 0) // Ensures the List aligns with the artwork and other content
+            .frame(maxWidth: .infinity) // Expands the List to fill available space
         }
         .padding()
         .navigationTitle(album.name) // Optional: Keep or remove this
+    }
+    
+    private func formatPlaytime(_ time: TimeInterval) -> String {
+        let hours = Int(time) / 3600
+        let minutes = (Int(time) % 3600) / 60
+        return hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
     }
     
     @ViewBuilder
@@ -105,8 +148,9 @@ struct AlbumDetailView: View {
                 // Duration on the right
                 Text(track.durationString)
             }
-            .padding(4)
-            .background(selectedTrack == track ? Color.blue.opacity(0.2) : Color.clear) // Highlight selected track
+            .padding(.vertical, 8) // Add padding within the row
+            .padding(.horizontal, 8)
+            .background(trackBackground(for: track, in: tracks))
             .cornerRadius(4)
             .contentShape(Rectangle()) // Ensures full row is tappable
             .onTapGesture {
@@ -122,6 +166,26 @@ struct AlbumDetailView: View {
                     PlaybackManager.shared.play(track: track)
                 }
             )
+            .listRowSeparator(.hidden) // Remove separator between rows
+            .listRowInsets(EdgeInsets()) // Remove all default List row insets
         }
+    }
+    
+    private func trackBackground(for track: Track, in tracks: [Track]) -> Color {
+        if selectedTrack == track {
+            return Color.indigo.opacity(0.4)
+        } else if let index = tracks.firstIndex(where: { $0.id == track.id }), index.isMultiple(of: 2) {
+            return Color.clear
+        } else {
+            return Color.black.opacity(0.1)
+        }
+    }
+    
+    private func playFirstTrack() {
+        guard let firstTrack = album.tracks.sorted(by: { $0.trackNumber < $1.trackNumber }).first else {
+            print("No tracks available to play.")
+            return
+        }
+        PlaybackManager.shared.play(track: firstTrack)
     }
 }

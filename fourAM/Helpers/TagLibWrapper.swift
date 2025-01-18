@@ -28,6 +28,7 @@ struct TagLibWrapper {
         }
         metadata["track number"] = Int(cMetadata.pointee.trackNumber)
         metadata["disc number"] = Int(cMetadata.pointee.discNumber)
+        metadata["releaseYear"] = Int(cMetadata.pointee.releaseYear)
         
         // Extract artwork
         if let artwork = cMetadata.pointee.artwork, cMetadata.pointee.artworkSize > 0 {
