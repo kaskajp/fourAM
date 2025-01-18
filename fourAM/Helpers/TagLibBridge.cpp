@@ -14,6 +14,7 @@ extern "C" {
         const char* genre;
         int trackNumber;
         int discNumber;
+        int releaseYear;
         unsigned char* artwork; // Artwork binary data
         size_t artworkSize;     // Size of the artwork
     };
@@ -75,6 +76,12 @@ extern "C" {
             metadata->genre = strdup(properties["GENRE"].toString().to8Bit(true).c_str());
         } else {
             metadata->genre = strdup(tag->genre().to8Bit(true).c_str());
+        }
+        
+        if (properties.contains("DATE")) {
+            metadata->releaseYear = properties["DATE"].toString().toInt();
+        } else {
+            metadata->releaseYear = 0; // Default to 0 if not available
         }
 
         // Extract track number
