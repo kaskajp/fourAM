@@ -11,7 +11,6 @@ import AppKit // Needed for NSOpenPanel on macOS
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
 
     @StateObject private var libraryViewModel = LibraryViewModel.shared
     @ObservedObject var playbackManager = PlaybackManager.shared
@@ -94,8 +93,10 @@ struct ContentView: View {
                 } else if selectedView == "TracksView" {
                     TracksView(libraryViewModel: libraryViewModel)
                 } else {
-                    Text("Select an item")
-                        .padding()
+                    AlbumsView(libraryViewModel: libraryViewModel, onAlbumSelected: { album in
+                        selectedAlbum = album
+                        selectedView = "AlbumDetailView"
+                    })
                 }
             }
 
@@ -192,5 +193,4 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
 }
