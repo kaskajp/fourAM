@@ -11,38 +11,91 @@ import AppKit
 
 struct AlbumsView: View {
     @ObservedObject var libraryViewModel = LibraryViewModel.shared
+    @StateObject private var keyMonitorManager = KeyMonitorManager()
     var onAlbumSelected: ((Album) -> Void)? = nil
     @Environment(\.modelContext) private var modelContext
     @AppStorage("coverImageSize") private var coverImageSize: Double = 120.0
+    @State private var searchQuery: String = "" // Search query for filtering albums
+    @State private var debouncedSearchQuery: String = ""
+    @StateObject private var timerManager = TimerManager()
+    @State private var filteredAlbums: [Album] = [] // Filtered albums
+    @FocusState private var isSearchFieldFocused: Bool
 
     // Cache the albums to avoid recalculating on every update
     @State private var cachedAlbums: [Album] = []
 
     var body: some View {
-        ScrollView {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: coverImageSize), spacing: 16)],
-                spacing: 16
-            ) {
-                ForEach(cachedAlbums) { album in
-                    AlbumItemView(
-                        album: album,
-                        coverImageSize: coverImageSize,
-                        onAlbumSelected: onAlbumSelected,
-                        modelContext: modelContext,
-                        libraryViewModel: libraryViewModel
-                    )
+        VStack {
+            HStack {
+                Spacer() // Push the search field to the right
+                
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray) // Set the color of the icon
+                    TextField("Search Albums or Artists", text: $searchQuery)
+                        .textFieldStyle(PlainTextFieldStyle()) // Use a plain style for better integration
+                        .frame(maxWidth: 200)
+                        .focused($isSearchFieldFocused)
+                        .onChange(of: searchQuery) { newValue in
+                            filterAlbums()
+                        }
                 }
+                .padding(8) // Add padding around the field
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.gray.opacity(0.2)) // Light gray background
+                )
             }
-            .padding()
+            .padding(.top, 16)
+            .padding(.horizontal, 16)
+
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: coverImageSize), spacing: 16)], spacing: 16) {
+                    ForEach(filteredAlbums, id: \.id) { album in
+                        AlbumItemView(
+                            album: album,
+                            coverImageSize: coverImageSize,
+                            onAlbumSelected: onAlbumSelected,
+                            modelContext: modelContext,
+                            libraryViewModel: libraryViewModel
+                        )
+                    }
+                }
+                .padding()
+            }
         }
         .onAppear {
-            cachedAlbums = libraryViewModel.allAlbums() // Cache albums once
+            keyMonitorManager.startMonitoring { isSearchFieldFocused }
+            filterAlbums() // Cache albums once
         }
-        .onChange(of: libraryViewModel.tracks) { _ in
-            cachedAlbums = libraryViewModel.allAlbums() // Refresh cache if tracks change
+        .onDisappear {
+            keyMonitorManager.stopMonitoring()
+        }
+        .onChange(of: debouncedSearchQuery) { newQuery in
+            filterAlbums()
         }
         .navigationTitle("Albums")
+    }
+    
+    private func filterAlbums() {
+        let albums = libraryViewModel.allAlbums() // Call once
+        if searchQuery.isEmpty {
+            filteredAlbums = albums
+        } else {
+            let lowercaseQuery = searchQuery.lowercased()
+            filteredAlbums = albums.filter { album in
+                album.name.lowercased().contains(lowercaseQuery) ||
+                album.albumArtist.lowercased().contains(lowercaseQuery)
+            }
+        }
+    }
+    
+    private func onSearchQueryChange() {
+        timerManager.debounce(interval: 0.3) {
+            DispatchQueue.main.async {
+                debouncedSearchQuery = searchQuery
+            }
+        }
     }
 }
 

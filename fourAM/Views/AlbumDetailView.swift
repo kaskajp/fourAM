@@ -12,6 +12,8 @@ struct AlbumDetailView: View {
     let album: Album
     let onBack: () -> Void // Closure to handle the back button action
 
+    @StateObject private var keyMonitorManager = KeyMonitorManager()
+    @FocusState private var isSearchFieldFocused: Bool
     @Environment(\.dismiss) var dismiss // Replace presentationMode with dismiss
     @State private var searchText: String = "" // To manage the search input
     @State private var selectedTrack: Track? // Track currently selected
@@ -25,7 +27,6 @@ struct AlbumDetailView: View {
         }
         let filteredGroupedTracks = Dictionary(grouping: filteredTracks) { $0.discNumber ?? 1 }
         let filteredSortedDiscs = filteredGroupedTracks.keys.sorted()
-        print(album)
 
         return VStack(alignment: .leading) {
             // Top bar
@@ -39,9 +40,19 @@ struct AlbumDetailView: View {
 
                 Spacer()
 
-                TextField("Filter", text: $searchText)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .frame(maxWidth: 200)
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray) // Set the color of the icon
+                    TextField("Filter tracks", text: $searchText)
+                        .textFieldStyle(PlainTextFieldStyle()) // Use a plain style for better integration
+                        .frame(maxWidth: 200)
+                        .focused($isSearchFieldFocused)
+                }
+                .padding(8) // Add padding around the field
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.gray.opacity(0.2)) // Light gray background
+                )
             }
             .padding(.bottom, 10)
             .zIndex(1)
@@ -103,13 +114,24 @@ struct AlbumDetailView: View {
                 ForEach(filteredSortedDiscs, id: \.self) { disc in
                     Group {
                         if filteredGroupedTracks.keys.count > 1 {
-                            Section(header: Text("Disc \(disc)").font(.headline)) {
-                                trackList(for: disc, tracks: filteredGroupedTracks[disc]!)
+                            // Custom header to avoid sticky behavior and darker background
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Disc \(disc)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 16) // Adjust header spacing
                             }
+                            .background(Color.clear) // Ensure no background
+                            .padding(.horizontal, 8) // Match content padding
+
+                            // Tracks for the current disc
+                            trackList(for: disc, tracks: filteredGroupedTracks[disc]!)
                         } else {
+                            // For single-disc albums
                             trackList(for: disc, tracks: filteredGroupedTracks[disc]!)
                         }
                     }
+                    .padding(0)
                 }
             }
             .scrollContentBackground(.hidden)
@@ -120,7 +142,13 @@ struct AlbumDetailView: View {
             .frame(maxWidth: .infinity) // Expands the List to fill available space
         }
         .padding()
-        .navigationTitle(album.name) // Optional: Keep or remove this
+        .navigationTitle(album.name)
+        .onAppear {
+            keyMonitorManager.startMonitoring { isSearchFieldFocused }
+        }
+        .onDisappear {
+            keyMonitorManager.stopMonitoring()
+        }
     }
     
     private func formatPlaytime(_ time: TimeInterval) -> String {

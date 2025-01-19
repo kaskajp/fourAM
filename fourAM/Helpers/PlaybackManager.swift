@@ -8,6 +8,7 @@
 import Foundation
 import AVFoundation
 import SwiftUI
+import Combine
 
 class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let shared = PlaybackManager()
@@ -19,7 +20,17 @@ class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published var isPlaying: Bool = false // Playback state
     @Published var isShuffleEnabled = false
     @Published var isRepeatEnabled = false
-    @Published var currentTime: Double = 0 // Current playback time in seconds
+    @Published private(set) var currentTime: Double = 0 {
+        didSet {
+            throttledCurrentTime.send(currentTime)
+        }
+    }
+    private let throttledCurrentTime = PassthroughSubject<Double, Never>()
+    var throttledTimePublisher: AnyPublisher<Double, Never> {
+        throttledCurrentTime
+            .throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest: true)
+            .eraseToAnyPublisher()
+    }
     @Published var playQueue: [Track] = [] // Tracks in the "Up Next" queue
     @Published var playHistory: [Track] = [] // List of played tracks in order
     @Published var currentIndex: Int? // Index of the currently playing track
@@ -55,15 +66,7 @@ class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 // Update the current index
                 if let index = libraryViewModel.tracks.firstIndex(where: { $0.path == track.path }) {
                     currentIndex = index
-                    print("Track found at index: \(index)")
                 } else {
-                    print("Track not found in library: \(track.path)")
-                    print("Tracks in library:")
-                    for (index, libraryTrack) in libraryViewModel.tracks.enumerated() {
-                        print("\(index): \(libraryTrack.path)")
-                    }
-
-                    print("Track to find: \(track.path)")
                     currentIndex = nil
                 }
                 

@@ -1,25 +1,30 @@
-//
-//  KeyboardShortcuts.swift
-//  fourAM
-//
-//  Created by Jonas on 2025-01-13.
-//
-
-import SwiftUI
 import AppKit
 
-class GlobalKeyEventHandler {
-    func setup(playbackManager: PlaybackManager) {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+class KeyMonitorManager: ObservableObject {
+    private var monitor: Any?
+
+    func startMonitoring(isSearchFieldFocused: @escaping () -> Bool) {
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if isSearchFieldFocused() {
+                return event // Allow system to handle the event if search is focused
+            }
+
             if event.characters == " " {
-                if playbackManager.isPlaying {
-                    playbackManager.pause()
+                if PlaybackManager.shared.isPlaying {
+                    PlaybackManager.shared.pause()
                 } else {
-                    playbackManager.resume()
+                    PlaybackManager.shared.resume()
                 }
                 return nil // Swallow the event
             }
-            return event // Pass the event to the system
+            return event
         }
+    }
+
+    func stopMonitoring() {
+        if let monitor = monitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        monitor = nil
     }
 }
