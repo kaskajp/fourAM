@@ -9,7 +9,7 @@
 
 import Foundation
 
-struct Album: Identifiable {
+struct Album: Identifiable, Hashable {
     let id = UUID()
     let name: String
     let albumArtist: String

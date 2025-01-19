@@ -10,12 +10,17 @@ import SwiftData
 
 class LibraryViewModel: ObservableObject {
     static let shared = LibraryViewModel() // Singleton instance
+    @Published var selectedAlbum: Album?
     @Published var tracks: [Track] = []
     @Published var isScanning: Bool = false
     @Published var progress: Double = 0.0
     @Published var currentPhase: String = "Scanning files..."
     
     private init() {}
+    
+    func selectAlbum(_ album: Album) {
+        selectedAlbum = album
+    }
     
     func deleteAlbum(_ album: Album, context: ModelContext) {
         // 1) For each track in this album, remove it from SwiftData
