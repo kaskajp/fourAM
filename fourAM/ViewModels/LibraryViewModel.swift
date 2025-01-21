@@ -179,6 +179,20 @@ class LibraryViewModel: ObservableObject {
         }
     }
     
+    func rescanAlbum(_ album: Album, context: ModelContext) {
+        // Ensure the album has at least one track to determine the folder path
+        guard let firstTrackPath = album.tracks.first?.path else {
+            print("Error: Unable to determine folder path for album '\(album.name)'")
+            return
+        }
+
+        // Determine the folder path of the album
+        let folderPath = (firstTrackPath as NSString).deletingLastPathComponent
+        
+        deleteAlbum(album, context: context)
+        loadLibrary(folderPath: folderPath, context: context)
+    }
+    
     private func createThumbnail(from data: Data, maxDimension: CGFloat) -> Data? {
         // Create an image source from the data
         guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil) else {

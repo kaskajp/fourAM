@@ -13,6 +13,7 @@ struct AlbumsView: View {
     @ObservedObject var libraryViewModel = LibraryViewModel.shared
     @StateObject private var keyMonitorManager = KeyMonitorManager()
     var onAlbumSelected: ((Album) -> Void)? = nil
+    var onSetRefreshAction: ((@escaping () -> Void) -> Void)?
     @Environment(\.modelContext) private var modelContext
     @AppStorage("coverImageSize") private var coverImageSize: Double = 120.0
     @State private var searchQuery: String = "" // Search query for filtering albums
@@ -20,9 +21,6 @@ struct AlbumsView: View {
     @StateObject private var timerManager = TimerManager()
     @State private var filteredAlbums: [Album] = [] // Filtered albums
     @FocusState private var isSearchFieldFocused: Bool
-
-    // Cache the albums to avoid recalculating on every update
-    @State private var cachedAlbums: [Album] = []
 
     var body: some View {
         VStack {
@@ -56,6 +54,9 @@ struct AlbumsView: View {
                             album: album,
                             coverImageSize: coverImageSize,
                             onAlbumSelected: onAlbumSelected,
+                            onDelete: {
+                                filterAlbums() // Refresh the filtered albums
+                            },
                             modelContext: modelContext,
                             libraryViewModel: libraryViewModel
                         )
@@ -67,12 +68,16 @@ struct AlbumsView: View {
         .onAppear {
             keyMonitorManager.startMonitoring { isSearchFieldFocused }
             filterAlbums() // Cache albums once
+            onSetRefreshAction?(filterAlbums) // Register filterAlbums as the refresh action
         }
         .onDisappear {
             keyMonitorManager.stopMonitoring()
         }
         .onChange(of: debouncedSearchQuery) { newQuery in
             filterAlbums()
+        }
+        .onChange(of: libraryViewModel.tracks) { _ in
+            filterAlbums() // Reapply filters when tracks change
         }
         .navigationTitle("Albums")
     }
@@ -103,6 +108,7 @@ struct AlbumItemView: View {
     let album: Album
     let coverImageSize: Double
     var onAlbumSelected: ((Album) -> Void)?
+    let onDelete: (() -> Void)?
     let modelContext: ModelContext
     let libraryViewModel: LibraryViewModel
 
@@ -142,12 +148,16 @@ struct AlbumItemView: View {
             .contextMenu {
                 Button(role: .destructive) {
                     libraryViewModel.deleteAlbum(album, context: modelContext)
+                    onDelete?()
                 } label: {
                     Text("Remove from Library")
                 }
 
                 Button("Show in Finder") {
                     showAlbumInFinder(album)
+                }
+                Button("Rescan") {
+                    libraryViewModel.rescanAlbum(album, context: modelContext)
                 }
             }
         }
@@ -158,7 +168,7 @@ struct AlbumItemView: View {
     private func showAlbumInFinder(_ album: Album) {
         guard let firstTrack = album.tracks.first else { return }
         let fullTrackPath = firstTrack.path
-        guard let topLevelFolderPath = findTopLevelFolder(for: fullTrackPath),
+        guard let topLevelFolderPath = LibraryHelper.findTopLevelFolder(for: fullTrackPath),
               let resolvedFolder = BookmarkManager.resolveBookmark(for: topLevelFolderPath),
               resolvedFolder.startAccessingSecurityScopedResource() else {
             print("Cannot resolve security scope.")
@@ -170,10 +180,5 @@ struct AlbumItemView: View {
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let subfolderURL = resolvedFolder.appendingPathComponent(relativeSubPath, isDirectory: false)
         NSWorkspace.shared.open(subfolderURL.deletingLastPathComponent())
-    }
-
-    private func findTopLevelFolder(for filePath: String) -> String? {
-        let allTopLevelFolders = BookmarkManager.allStoredFolderPaths()
-        return allTopLevelFolders.first { filePath.hasPrefix($0) }
     }
 }
