@@ -37,4 +37,9 @@ class LibraryHelper {
             return []
         }
     }
+    
+    static func findTopLevelFolder(for filePath: String) -> String? {
+        let allTopLevelFolders = BookmarkManager.allStoredFolderPaths()
+        return allTopLevelFolders.first { filePath.hasPrefix($0) }
+    }
 }

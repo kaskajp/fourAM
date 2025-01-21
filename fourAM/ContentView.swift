@@ -17,6 +17,7 @@ struct ContentView: View {
     
     @State private var selectedView: String? = nil
     @State private var selectedAlbum: Album? = nil
+    @State private var refreshAction: (() -> Void)? = nil
     
     // Group audio files by artist
     private var artistsDictionary: [String: [Track]] {
@@ -80,10 +81,16 @@ struct ContentView: View {
                 .frame(minWidth: 180) 
             } detail: {
                 if selectedView == "AlbumsView" {
-                    AlbumsView(libraryViewModel: libraryViewModel, onAlbumSelected: { album in
-                        selectedAlbum = album
-                        selectedView = "AlbumDetailView"
-                    })
+                    AlbumsView(
+                        libraryViewModel: libraryViewModel,
+                        onAlbumSelected: { album in
+                            selectedAlbum = album
+                            selectedView = "AlbumDetailView"
+                        },
+                        onSetRefreshAction: { action in
+                            refreshAction = action
+                        }
+                    )
                 } else if selectedView == "AlbumDetailView", let album = selectedAlbum {
                     AlbumDetailView(album: album) {
                         selectedView = "AlbumsView" // Navigate back to AlbumsView
@@ -182,6 +189,10 @@ struct ContentView: View {
                         libraryViewModel.progress = 1.0 // Ensure progress bar shows 100%
                         print("Scanning complete. Found \(totalFiles) audio files.")
                         libraryViewModel.loadLibrary(folderPath: selectedFolder.path, context: modelContext)
+                        
+                        if selectedView == "AlbumsView" {
+                            refreshAction?() // Trigger refresh if AlbumsView is active
+                        }
                     }
                 }
             } catch {
