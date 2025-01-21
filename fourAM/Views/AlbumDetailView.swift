@@ -59,7 +59,7 @@ struct AlbumDetailView: View {
 
             // Album header (cover + album title)
             HStack(spacing: 8) {
-                if let data = album.artwork,
+                if let data = album.thumbnail,
                    let nsImage = NSImage(data: data) {
                     Image(nsImage: nsImage)
                         .resizable()

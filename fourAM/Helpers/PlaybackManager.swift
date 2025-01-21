@@ -122,7 +122,7 @@ class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     
     private func startTimer() {
         stopTimer()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             if let player = self.audioPlayer {
                 self.currentTime = player.currentTime
