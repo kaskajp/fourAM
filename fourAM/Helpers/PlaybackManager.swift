@@ -9,10 +9,12 @@ import Foundation
 import AVFoundation
 import SwiftUI
 import Combine
+import SwiftData
 
 class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let shared = PlaybackManager()
     private var audioPlayer: AVAudioPlayer?
+    @Environment(\.modelContext) var modelContext
     
     @ObservedObject var libraryViewModel = LibraryViewModel.shared
 
@@ -113,6 +115,9 @@ class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         if flag {
+            if (currentTrack != nil) {
+                libraryViewModel.incrementPlayCount(for: currentTrack!, context: modelContext)
+            }
             print("Track finished playing. Moving to the next track.")
             nextTrack()
         } else {
