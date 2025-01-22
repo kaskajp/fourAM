@@ -12,6 +12,8 @@ struct AlbumDetailView: View {
     let album: Album
     let onBack: () -> Void // Closure to handle the back button action
 
+    @Environment(\.modelContext) var modelContext
+    @ObservedObject var libraryViewModel = LibraryViewModel.shared
     @StateObject private var keyMonitorManager = KeyMonitorManager()
     @FocusState private var isSearchFieldFocused: Bool
     @Environment(\.dismiss) var dismiss // Replace presentationMode with dismiss
@@ -172,9 +174,20 @@ struct AlbumDetailView: View {
                     .font(.headline)
 
                 Spacer()
+                
+                HStack(spacing: 4) {
+                    Image(systemName: "music.note")
+                        .foregroundColor(.secondary)
+                        .frame(width: 16, alignment: .trailing)
+                    Text("\(track.playCount)")
+                        .foregroundColor(.secondary)
+                        .frame(minWidth: 8, alignment: .leading)
+                }
+                .frame(width: 80, alignment: .trailing)
 
                 // Duration on the right
                 Text(track.durationString)
+                    .frame(width: 50, alignment: .trailing)
             }
             .padding(.vertical, 8) // Add padding within the row
             .padding(.horizontal, 8)
@@ -196,6 +209,11 @@ struct AlbumDetailView: View {
             )
             .listRowSeparator(.hidden) // Remove separator between rows
             .listRowInsets(EdgeInsets()) // Remove all default List row insets
+            .contextMenu {
+                Button("Reset Play Count") {
+                    libraryViewModel.resetPlayCountForTrack(for: track, context: modelContext)
+                }
+            }
         }
     }
     

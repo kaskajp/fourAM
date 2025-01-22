@@ -259,4 +259,22 @@ class LibraryViewModel: ObservableObject {
 
         return albums.sorted { $0.name < $1.name }
     }
+    
+    func incrementPlayCount(for track: Track, context: ModelContext) {
+        do {
+            track.playCount += 1
+            try context.save()
+        } catch {
+            print("Failed to increment play count: \(error)")
+        }
+    }
+    
+    func resetPlayCountForTrack(for track: Track, context: ModelContext) {
+        do {
+            track.playCount = 0
+            try context.save()
+        } catch {
+            print("Failed to reset play count: \(error)")
+        }
+    }
 }
