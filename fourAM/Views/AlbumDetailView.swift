@@ -175,6 +175,16 @@ struct AlbumDetailView: View {
 
                 Spacer()
                 
+                // Favorite toggle
+                Button(action: {
+                    toggleFavorite(for: track)
+                }) {
+                    Image(systemName: track.favorite ? "heart.fill" : "heart")
+                        .foregroundColor(track.favorite ? .indigo : .gray)
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                // Play count
                 HStack(spacing: 4) {
                     Image(systemName: "music.note")
                         .foregroundColor(.secondary)
@@ -214,6 +224,16 @@ struct AlbumDetailView: View {
                     libraryViewModel.resetPlayCountForTrack(for: track, context: modelContext)
                 }
             }
+        }
+    }
+    
+    private func toggleFavorite(for track: Track) {
+        guard let context = try? modelContext else { return }
+        track.favorite.toggle()
+        do {
+            try context.save()
+        } catch {
+            print("Failed to toggle favorite: \(error)")
         }
     }
     

@@ -70,6 +70,16 @@ struct ContentView: View {
                             }
                         }
                     }
+                    
+                    Section("Playlists") {
+                        NavigationLink(value: "FavoriteTracksView") {
+                            HStack(spacing: 4) {
+                                Image(systemName: "heart.fill")
+                                    .foregroundColor(.indigo)
+                                Text("Favorite Tracks")
+                            }
+                        }
+                    }
                 }
                 .toolbar {
                     ToolbarItem {
@@ -99,6 +109,8 @@ struct ContentView: View {
                     ArtistsView(libraryViewModel: libraryViewModel)
                 } else if selectedView == "TracksView" {
                     TracksView(libraryViewModel: libraryViewModel)
+                } else if selectedView == "FavoriteTracksView" {
+                    FavoriteTracksView(libraryViewModel: libraryViewModel)
                 } else {
                     AlbumsView(libraryViewModel: libraryViewModel, onAlbumSelected: { album in
                         selectedAlbum = album
