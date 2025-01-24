@@ -1,10 +1,3 @@
-//
-//  GeneralSettingsView.swift
-//  fourAM
-//
-//  Created by Jonas on 2025-01-06.
-//
-
 import SwiftUI
 
 struct GeneralSettingsView: View {

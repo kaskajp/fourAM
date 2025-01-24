@@ -1,10 +1,3 @@
-//
-//  ThumbnailCache.swift
-//  fourAM
-//
-//  Created by Jonas on 2025-01-16.
-//
-
 import SwiftUI
 
 actor ThumbnailCache {

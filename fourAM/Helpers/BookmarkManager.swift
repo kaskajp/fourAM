@@ -1,10 +1,3 @@
-//
-//  BookmarkManager.swift
-//  fourAM
-//
-//  Created by Jonas on 2025-01-06.
-//
-// MARK: - BookmarkManager.swift
 import Foundation
 
 struct BookmarkManager {

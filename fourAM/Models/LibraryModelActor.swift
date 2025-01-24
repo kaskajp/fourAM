@@ -1,10 +1,3 @@
-//
-//  LibraryModelActor.swift
-//  fourAM
-//
-//  Created by Jonas on 2025-01-07.
-//
-
 import SwiftData
 
 actor LibraryModelActor {
