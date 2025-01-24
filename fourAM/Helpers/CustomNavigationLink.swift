@@ -1,10 +1,3 @@
-//
-//  CustomNavigationLink.swift
-//  fourAM
-//
-//  Created by Jonas on 2025-01-18.
-//
-
 import SwiftUI
 
 struct CustomNavigationLink: View {

@@ -1,12 +1,3 @@
-//
-//  Album.swift
-//  fourAM
-//
-//  Created by Jonas on 2025-01-06.
-//
-
-// Album.swift
-
 import Foundation
 
 struct Album: Identifiable, Hashable {

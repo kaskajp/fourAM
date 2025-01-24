@@ -1,10 +1,3 @@
-//
-//  FavoriteTracksView.swift
-//  fourAM
-//
-//  Created by Jonas on 2025-01-22.
-//
-
 import SwiftUI
 import SwiftData
 

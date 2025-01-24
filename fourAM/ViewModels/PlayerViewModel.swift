@@ -1,10 +1,3 @@
-//
-//  PlayerViewModel.swift
-//  fourAM
-//
-//  Created by Jonas on 2025-01-05.
-//
-
 import Foundation
 
 class PlayerViewModel: ObservableObject {

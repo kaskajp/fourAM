@@ -1,10 +1,3 @@
-//
-//  TimerManager.swift
-//  fourAM
-//
-//  Created by Jonas on 2025-01-19.
-//
-
 import SwiftUI
 
 class TimerManager: ObservableObject {

@@ -1,10 +1,3 @@
-//
-//  AsyncSemaphore.swift
-//  fourAM
-//
-//  Created by Jonas on 2025-01-15.
-//
-
 actor AsyncSemaphore {
     private let limit: Int
     private var currentCount: Int = 0

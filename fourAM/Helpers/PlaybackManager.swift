@@ -1,10 +1,3 @@
-//
-//  PlaybackManager.swift
-//  fourAM
-//
-//  Created by Jonas on 2025-01-06.
-//
-
 import Foundation
 import AVFoundation
 import SwiftUI
