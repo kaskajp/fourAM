@@ -214,7 +214,8 @@ struct AlbumDetailView: View {
                     // Double-click to play the track
                     print("Double-click, try to play \(track.title)")
                     selectedTrack = track
-                    PlaybackManager.shared.play(track: track)
+                    
+                    PlaybackManager.shared.play(track: track, tracks: tracks)
                 }
             )
             .listRowSeparator(.hidden) // Remove separator between rows
@@ -252,6 +253,6 @@ struct AlbumDetailView: View {
             print("No tracks available to play.")
             return
         }
-        PlaybackManager.shared.play(track: firstTrack)
+        PlaybackManager.shared.play(track: firstTrack, tracks: PlaybackManager.shared.playQueue)
     }
 }

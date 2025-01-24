@@ -74,7 +74,7 @@ struct FavoriteTracksView: View {
                 .simultaneousGesture(
                     TapGesture(count: 2).onEnded {
                         // Double-click to play the track
-                        PlaybackManager.shared.play(track: track)
+                        PlaybackManager.shared.play(track: track, tracks: favoriteTracks)
                     }
                 )
                 .contextMenu {
