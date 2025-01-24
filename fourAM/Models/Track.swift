@@ -25,6 +25,7 @@ class Track: Equatable {
     var genre: String?
     var releaseYear: Int
     var playCount: Int = 0
+    var favorite: Bool = false
 
     init(
         path: String,
@@ -40,7 +41,8 @@ class Track: Equatable {
         durationString: String = "0:00",
         genre: String? = nil,
         releaseYear: Int = 0,
-        playCount: Int = 0
+        playCount: Int = 0,
+        favorite: Bool = false
     ) {
         self.path = path
         self.url = url
@@ -56,6 +58,7 @@ class Track: Equatable {
         self.genre = genre
         self.releaseYear = releaseYear
         self.playCount = playCount
+        self.favorite = favorite
     }
     
     static func == (lhs: Track, rhs: Track) -> Bool {

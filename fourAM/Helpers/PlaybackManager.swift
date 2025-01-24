@@ -45,7 +45,12 @@ class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
 
     // MARK: - Playback Controls
 
-    func play(track: Track) {
+    func play(track: Track, tracks: [Track]) {
+        if tracks.isEmpty {
+            print("Cannot play track: No tracks provided")
+            return
+        }
+        
         guard let trackURL = URL(string: track.path) else {
             print("Invalid track URL")
             return
@@ -65,15 +70,14 @@ class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 audioPlayer?.delegate = self
                 audioPlayer?.play()
                 
-                // Update the current index
-                if let index = libraryViewModel.tracks.firstIndex(where: { $0.path == track.path }) {
+                currentTrack = track
+                isPlaying = true
+                
+                if let index = tracks.firstIndex(where: { $0.path == track.path }) {
                     currentIndex = index
                 } else {
                     currentIndex = nil
                 }
-                
-                currentTrack = track
-                isPlaying = true
                 
                 // Add the current track to the history if it's not already the last played
                 if let currentTrack = currentTrack, playHistory.last != currentTrack {
@@ -81,7 +85,7 @@ class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
                 }
 
                 startTimer()
-                updateQueue()
+                updateQueue(with: tracks)
                 print("Playing \(track.title)")
             } catch {
                 print("Failed to play track: \(error)")
@@ -146,15 +150,28 @@ class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         return String(format: "%02d:%02d", minutes, seconds)
     }
     
-    func updateQueue() {
-        guard let currentIndex = currentIndex, libraryViewModel.tracks.indices.contains(currentIndex) else {
+    func updateQueue(with tracks: [Track]) {
+        if tracks.isEmpty {
             playQueue = []
-            print("Queue update failed: invalid currentIndex or empty tracks array")
+            print("Queue update failed: empty tracks array.")
+            return
+        }
+        
+        // Use the provided tracks array or default to libraryViewModel.tracks
+        /*print("Updating playback queue...")
+        for (index, t) in tracks.enumerated() {
+            print("\(index + 1): \(t.title)")
+        }*/
+
+        guard let currentIndex = currentIndex, tracks.indices.contains(currentIndex) else {
+            playQueue = []
+            print("Queue update failed: invalid currentIndex or empty track list")
             return
         }
 
-        let nextTracks = libraryViewModel.tracks[(currentIndex + 1)...].prefix(10)
-        playQueue = Array(nextTracks)
+        // Create the next 10 tracks queue starting from the current index
+        // let nextTracks = trackList[(currentIndex + 1)...].prefix(10)
+        playQueue = tracks
         print("Queue updated, count: \(playQueue.count)")
     }
 
@@ -165,13 +182,13 @@ class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         }
         
         if isShuffleEnabled {
-            self.currentIndex = Int.random(in: 0..<libraryViewModel.tracks.count)
+            self.currentIndex = Int.random(in: 0..<playQueue.count)
         } else {
-            self.currentIndex = (currentIndex + 1) % libraryViewModel.tracks.count
+            self.currentIndex = (currentIndex + 1) % playQueue.count
         }
         
         if let nextIndex = self.currentIndex {
-            play(track: libraryViewModel.tracks[nextIndex])
+            play(track: playQueue[nextIndex], tracks: playQueue)
         } else {
             print("Error: nextIndex is nil")
         }
@@ -198,7 +215,7 @@ class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
         // Find the index of the last played track in the library and play it
         if let previousIndex = libraryViewModel.tracks.firstIndex(of: lastPlayedTrack) {
             currentIndex = previousIndex
-            play(track: libraryViewModel.tracks[previousIndex])
+            play(track: playQueue[previousIndex], tracks: playQueue)
             print("Playing previous track: \(lastPlayedTrack.title)")
         } else {
             print("Previous track not found in library: \(lastPlayedTrack.path)")
