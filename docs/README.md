@@ -1,4 +1,4 @@
-# fourAM Developer Documentation
+# 4AM Developer Documentation
 
 ## Dependencies
 
