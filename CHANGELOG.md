@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Versions prior to 0.56.0 are not tracked in this changelog.
 
 ### Added
-- This changelog [#24](#24)
-- License file [#26](#26)
+- This changelog [#24](https://github.com/kaskajp/fourAM/issues/24)
+- License file [#26](https://github.com/kaskajp/fourAM/issues/26)
 
 ### Changed
 - Changed the name of the app to 4AM
