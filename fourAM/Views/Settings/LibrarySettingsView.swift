@@ -29,12 +29,12 @@ struct LibrarySettingsView: View {
                     .padding()
             } else {
                 Form {
-                    HStack {
+                    /*HStack {
                         TextField("Default Library Path", text: $defaultLibraryPath)
                         Button("Browse...") {
                             chooseFolder()
                         }
-                    }
+                    }*/
 
                     // Clear Library Button
                     Section {

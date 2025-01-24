@@ -16,15 +16,15 @@ struct AppearanceSettingsView: View {
     var body: some View {
         Form {
             // Theme Picker
-            Picker("Theme", selection: $theme) {
+            /*Picker("Theme", selection: $theme) {
                 ForEach(themes, id: \.self) { theme in
                     Text(theme)
                 }
             }
-            .pickerStyle(SegmentedPickerStyle())
+            .pickerStyle(SegmentedPickerStyle())*/
 
             // Cover Image Size Slider
-            Section("Album Cover Size") {
+            //Section("Album Cover Size") {
                 VStack(alignment: .leading) {
                     Slider(value: $coverImageSize, in: 50...200, step: 10) {
                         Text("Cover Image Size")
@@ -33,7 +33,7 @@ struct AppearanceSettingsView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-            }
+            //}
         }
         .padding()
         .navigationTitle("Appearance")

@@ -13,20 +13,20 @@ struct SettingsView: View {
     
     var body: some View {
         TabView {
-            GeneralSettingsView()
+            /*GeneralSettingsView()
                 .tabItem {
                     Label("General", systemImage: "gear")
-                }
+                }*/
             
             LibrarySettingsView(modelContext: modelContext)
                 .tabItem {
                     Label("Library", systemImage: "folder")
                 }
             
-            OutputSettingsView()
+            /*OutputSettingsView()
                 .tabItem {
                     Label("Output", systemImage: "speaker.wave.2")
-                }
+                }*/
             
             AppearanceSettingsView()
                 .tabItem {

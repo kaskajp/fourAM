@@ -101,7 +101,7 @@ struct PlaybackControlsView: View {
             Button(action: playbackManager.toggleShuffle) {
                 Image(systemName: playbackManager.isShuffleEnabled ? "shuffle.circle.fill" : "shuffle.circle")
                     .font(.title2)
-                    .foregroundColor(playbackManager.isShuffleEnabled ? .blue : .primary)
+                    .foregroundColor(playbackManager.isShuffleEnabled ? .indigo : .primary)
             }
             .buttonStyle(PlainButtonStyle())
 
@@ -134,7 +134,7 @@ struct PlaybackControlsView: View {
             Button(action: playbackManager.toggleRepeat) {
                 Image(systemName: playbackManager.isRepeatEnabled ? "repeat.circle.fill" : "repeat.circle")
                     .font(.title2)
-                    .foregroundColor(playbackManager.isRepeatEnabled ? .blue : .primary)
+                    .foregroundColor(playbackManager.isRepeatEnabled ? .indigo : .primary)
             }
             .buttonStyle(PlainButtonStyle())
         }
