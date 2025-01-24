@@ -48,13 +48,13 @@ struct ContentView: View {
                     }
                     
                     Section("Library") {
-                        NavigationLink(value: "ArtistsView") {
+                        /*NavigationLink(value: "ArtistsView") {
                             HStack(spacing: 4) {
                                 Image(systemName: "music.microphone")
                                     .foregroundColor(.indigo)
                                 Text("Artists")
                             }
-                        }
+                        }*/
                         NavigationLink(value: "AlbumsView") {
                             HStack(spacing: 4) {
                                 Image(systemName: "square.stack")
@@ -62,13 +62,13 @@ struct ContentView: View {
                                 Text("Albums")
                             }
                         }
-                        NavigationLink(value: "TracksView") {
+                        /*NavigationLink(value: "TracksView") {
                             HStack(spacing: 4) {
                                 Image(systemName: "music.note.list")
                                     .foregroundColor(.indigo)
                                 Text("Tracks")
                             }
-                        }
+                        }*/
                     }
                     
                     Section("Playlists") {
@@ -124,6 +124,7 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity) // Ensures it spans the full width of the window
         }
         .onAppear {
+            PlaybackManager.shared.setModelContext(modelContext)
             libraryViewModel.tracks = LibraryHelper.fetchTracks(from: modelContext)
             print("Library loaded on appear with \(libraryViewModel.tracks.count) tracks")
         }
