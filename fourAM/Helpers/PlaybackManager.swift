@@ -14,7 +14,11 @@ import SwiftData
 class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let shared = PlaybackManager()
     private var audioPlayer: AVAudioPlayer?
-    @Environment(\.modelContext) var modelContext
+    private var modelContext: ModelContext?
+    
+    func setModelContext(_ context: ModelContext) {
+        self.modelContext = context
+    }
     
     @ObservedObject var libraryViewModel = LibraryViewModel.shared
 
@@ -118,12 +122,21 @@ class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
     
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        guard let context = modelContext else {
+            print("ModelContext is not set!")
+            return
+        }
+        
         if flag {
             if (currentTrack != nil) {
-                libraryViewModel.incrementPlayCount(for: currentTrack!, context: modelContext)
+                libraryViewModel.incrementPlayCount(for: currentTrack!, context: context)
             }
             print("Track finished playing. Moving to the next track.")
-            nextTrack()
+            if isRepeatEnabled {
+                play(track: currentTrack!, tracks: playQueue)
+            } else {
+                nextTrack()
+            }
         } else {
             print("Playback finished unsuccessfully.")
         }
