@@ -55,7 +55,49 @@ class LibraryViewModel: ObservableObject {
         return artistSet.sorted()
     }
 
+    @MainActor
+    private func updateProgress(_ value: Double) {
+        self.progress = value
+    }
+    
+    @MainActor
+    private func updatePhase(_ phase: String) {
+        self.currentPhase = phase
+    }
+    
+    @MainActor
+    private func saveTracksToContext(_ tracks: [Track], context: ModelContext) {
+        do {
+            // Insert tracks
+            for track in tracks {
+                context.insert(track)
+            }
+            try context.save()
+            
+            // Update tracks on main actor
+            self.tracks = LibraryHelper.fetchTracks(from: context)
+            print("Successfully saved \(tracks.count) new tracks to SwiftData.")
+            
+            self.progress = 1.0
+            self.currentPhase = ""
+            self.isScanning = false
+        } catch {
+            print("Error saving tracks to SwiftData: \(error)")
+        }
+    }
+    
+    @MainActor
+    private func fetchExistingPaths(context: ModelContext) -> Set<String> {
+        do {
+            return Set(try context.fetch(FetchDescriptor<Track>()).map { $0.path })
+        } catch {
+            print("Error fetching existing paths: \(error)")
+            return []
+        }
+    }
+    
     /// Asynchronously scan a folder, extract metadata, and save new tracks to SwiftData.
+    @MainActor
     func loadLibrary(folderPath: String, context: ModelContext) {
         isScanning = true
         progress = 0.0
@@ -63,115 +105,94 @@ class LibraryViewModel: ObservableObject {
         clearAlbumsCache() // Clear cache when loading new library
 
         // Allow the UI to update before starting the scanning process
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        Task {
+            // Get existing paths before starting the scan
+            let existingPaths = self.fetchExistingPaths(context: context)
+            
             FileScanner.scanLibraryAsync(
                 folderPath: folderPath,
                 progressHandler: { newProgress in
-                    // Update progress during file scanning (50% max)
-                    DispatchQueue.main.async {
+                    Task { @MainActor in
                         self.progress = newProgress // Scanning contributes to the first phase
                     }
                 },
                 completion: { files in
-                    DispatchQueue.global(qos: .userInitiated).async {
-                        Task {
-                            let totalFiles = files.count
-                            var processedFiles = 0
-                            let fileProcessingUpdateInterval = 10 // Only update the UI every 50 processed files
-                            let semaphore = AsyncSemaphore(limit: 1) // Limit to 2 concurrent tasks
-                            var newTracks: [Track] = []
+                    Task {
+                        let totalFiles = files.count
+                        var processedFiles = 0
+                        let fileProcessingUpdateInterval = 10
+                        let semaphore = AsyncSemaphore(limit: 1)
+                        var newTracks: [Track] = []
+                        
+                        await MainActor.run {
+                            self.updatePhase("Processing files...")
+                            self.progress = 0.0
+                        }
+                        
+                        await withTaskGroup(of: Track?.self) { group in
+                            let thumbnailCache = ThumbnailCache()
                             
-                            let existingPaths = Set(try context.fetch(FetchDescriptor<Track>()).map { $0.path })
-                            
-                            DispatchQueue.main.async {
-                                self.currentPhase = "Processing files..."
-                                self.progress = 0.0
-                            }
-                            
-                            await withTaskGroup(of: Track?.self) { group in
-                                let thumbnailCache = ThumbnailCache() // Use the actor for thread-safe access
-                                
-                                for url in files {
-                                    group.addTask {
-                                        await semaphore.wait() // Wait for an available slot
-                                        defer {
-                                            Task { await semaphore.signal() } // Release the slot asynchronously
-                                        }
+                            for url in files {
+                                group.addTask {
+                                    await semaphore.wait()
+                                    defer { Task { await semaphore.signal() } }
+                                    
+                                    do {
+                                        let audioFile = try await MetadataExtractor.extract(from: url)
                                         
-                                        do {
-                                            let audioFile = try await MetadataExtractor.extract(from: url)
-                                            
-                                            if !existingPaths.contains(url.path) {
-                                                if !audioFile.album.isEmpty {
-                                                    if await thumbnailCache.getThumbnail(for: audioFile.album) == nil,
-                                                       let artwork = audioFile.artwork {
-                                                        if let image = NSImage(data: artwork) {
-                                                            if let thumbnail = self.createThumbnail(from: artwork, maxDimension: 300) {
-                                                                await thumbnailCache.setThumbnail(thumbnail, for: audioFile.album)
-                                                            }
+                                        if !existingPaths.contains(url.path) {
+                                            if !audioFile.album.isEmpty {
+                                                if await thumbnailCache.getThumbnail(for: audioFile.album) == nil,
+                                                   let artwork = audioFile.artwork {
+                                                    if NSImage(data: artwork) != nil {
+                                                        if let thumbnail = self.createThumbnail(from: artwork, maxDimension: 300) {
+                                                            await thumbnailCache.setThumbnail(thumbnail, for: audioFile.album)
                                                         }
                                                     }
                                                 }
-                                                
-                                                return Track(
-                                                    path: url.path,
-                                                    url: url,
-                                                    title: audioFile.title,
-                                                    artist: audioFile.artist,
-                                                    album: audioFile.album,
-                                                    discNumber: audioFile.discNumber,
-                                                    albumArtist: audioFile.albumArtist,
-                                                    artwork: audioFile.artwork,
-                                                    thumbnail: await thumbnailCache.getThumbnail(for: audioFile.album),
-                                                    trackNumber: audioFile.trackNumber,
-                                                    durationString: audioFile.durationString,
-                                                    genre: audioFile.genre,
-                                                    releaseYear: audioFile.releaseYear
-                                                )
                                             }
-                                        } catch {
-                                            print("Error processing file \(url): \(error)")
+                                            
+                                            return Track(
+                                                path: url.path,
+                                                url: url,
+                                                title: audioFile.title,
+                                                artist: audioFile.artist,
+                                                album: audioFile.album,
+                                                discNumber: audioFile.discNumber,
+                                                albumArtist: audioFile.albumArtist,
+                                                artwork: audioFile.artwork,
+                                                thumbnail: await thumbnailCache.getThumbnail(for: audioFile.album),
+                                                trackNumber: audioFile.trackNumber,
+                                                durationString: audioFile.durationString,
+                                                genre: audioFile.genre,
+                                                releaseYear: audioFile.releaseYear
+                                            )
                                         }
-                                        return nil
+                                    } catch {
+                                        print("Error processing file \(url): \(error)")
                                     }
-                                }
-                                
-                                for await track in group {
-                                    if let track = track {
-                                        newTracks.append(track)
-                                    }
-                                    processedFiles += 1
-                                    
-                                    // Throttle initial updates and logging
-                                    if processedFiles % fileProcessingUpdateInterval == 0 || processedFiles == totalFiles {
-                                        DispatchQueue.main.async {
-                                            self.progress = Double(processedFiles) / Double(totalFiles)
-                                        }
-                                    }
+                                    return nil
                                 }
                             }
                             
-                            DispatchQueue.main.async {
-                                do {
-                                    for track in newTracks {
-                                        context.insert(track)
-                                    }
-                                    do {
-                                        try context.save()
-                                    } catch {
-                                        print("Error saving tracks to SwiftData: \(error)")
-                                    }
-                                    
-                                    self.tracks = LibraryHelper.fetchTracks(from: context)
-                                    print("Successfully saved \(newTracks.count) new tracks to SwiftData.")
-                                } catch {
-                                    print("Error saving tracks to SwiftData: \(error)")
+                            for await track in group {
+                                if let track = track {
+                                    newTracks.append(track)
                                 }
+                                processedFiles += 1
                                 
-                                self.progress = 1.0
-                                self.currentPhase = ""
-                                self.isScanning = false
+                                if processedFiles % fileProcessingUpdateInterval == 0 || processedFiles == totalFiles {
+                                    let progressValue = Double(processedFiles) / Double(totalFiles)
+                                    await MainActor.run {
+                                        self.updateProgress(progressValue)
+                                    }
+                                }
                             }
+                        }
+                        
+                        // Save tracks on main actor
+                        await MainActor.run {
+                            self.saveTracksToContext(newTracks, context: context)
                         }
                     }
                 }
@@ -179,6 +200,7 @@ class LibraryViewModel: ObservableObject {
         }
     }
     
+    @MainActor
     func rescanAlbum(_ album: Album, context: ModelContext) {
         // Ensure the album has at least one track to determine the folder path
         guard let firstTrackPath = album.tracks.first?.path else {
@@ -237,12 +259,14 @@ class LibraryViewModel: ObservableObject {
             return cachedAlbums
         }
         
-        // If not in cache or cache expired, load albums
+        // Capture necessary values before async work
+        let tracksSnapshot = tracks
+        
         return await withCheckedContinuation { continuation in
-            DispatchQueue.main.async {
-                self.isLoadingAlbums = true
+            Task { @MainActor in
+                isLoadingAlbums = true
                 
-                let artistTracks = self.tracks.filter { $0.artist == artist }
+                let artistTracks = tracksSnapshot.filter { $0.artist == artist }
                 let grouped = Dictionary(grouping: artistTracks, by: \.album)
                 
                 let albums = grouped.map { (albumName, albumTracks) in
@@ -259,9 +283,9 @@ class LibraryViewModel: ObservableObject {
                 .sorted { $0.name < $1.name }
                 
                 // Update cache
-                self.albumsCache[artist] = albums
-                self.lastRefreshTime = Date()
-                self.isLoadingAlbums = false
+                albumsCache[artist] = albums
+                lastRefreshTime = Date()
+                isLoadingAlbums = false
                 
                 continuation.resume(returning: albums)
             }
@@ -277,11 +301,14 @@ class LibraryViewModel: ObservableObject {
             return cachedAlbums
         }
         
+        // Capture necessary values before async work
+        let tracksSnapshot = tracks
+        
         return await withCheckedContinuation { continuation in
-            DispatchQueue.main.async {
-                self.isLoadingAlbums = true
+            Task { @MainActor in
+                isLoadingAlbums = true
                 
-                let grouped = Dictionary(grouping: self.tracks, by: \.album)
+                let grouped = Dictionary(grouping: tracksSnapshot, by: \.album)
                 var albums: [Album] = []
                 
                 for (albumName, albumTracks) in grouped {
@@ -301,9 +328,9 @@ class LibraryViewModel: ObservableObject {
                 let sortedAlbums = albums.sorted { $0.name < $1.name }
                 
                 // Update cache
-                self.albumsCache["_all"] = sortedAlbums
-                self.lastRefreshTime = Date()
-                self.isLoadingAlbums = false
+                albumsCache["_all"] = sortedAlbums
+                lastRefreshTime = Date()
+                isLoadingAlbums = false
                 
                 continuation.resume(returning: sortedAlbums)
             }

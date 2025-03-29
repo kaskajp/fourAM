@@ -72,8 +72,8 @@ struct PlaybackControlsView: View {
                     .onAppear {
                         scrubberTime = playbackManager.currentTime
                     }
-                    .onChange(of: playbackManager.currentTime) { newTime in
-                        scrubberTime = newTime
+                    .onChange(of: playbackManager.currentTime) { oldValue, newValue in
+                        scrubberTime = newValue
                     }
                 }
                 

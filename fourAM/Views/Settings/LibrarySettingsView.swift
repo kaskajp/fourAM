@@ -12,7 +12,9 @@ struct LibrarySettingsView: View {
     @EnvironmentObject var libraryViewModel: LibraryViewModel // Access ViewModel globally
     
     init(modelContext: ModelContext) {
-        self.libraryActor = LibraryModelActor(context: modelContext)
+        // Initialize the actor with a container descriptor instead of the context
+        let descriptor = try! ModelContainer(for: Track.self).mainContext.container.configurations.first!
+        self.libraryActor = LibraryModelActor(modelDescriptor: descriptor)
     }
 
     var body: some View {
@@ -67,13 +69,13 @@ struct LibrarySettingsView: View {
             do {
                 try await libraryActor.deleteAllTracks()
                 let remainingTracks = try await libraryActor.fetchAllTracks()
-                DispatchQueue.main.async {
+                await MainActor.run {
                     self.libraryViewModel.tracks = remainingTracks
                     self.isClearing = false
                     print("Library cleared successfully.")
                 }
             } catch {
-                DispatchQueue.main.async {
+                await MainActor.run {
                     self.isClearing = false
                     print("Failed to clear library: \(error)")
                 }

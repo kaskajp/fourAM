@@ -15,12 +15,10 @@ struct AlbumDetailView: View {
 
     var body: some View {
         // Group and sort tracks
-        let groupedTracks = Dictionary(grouping: album.tracks) { $0.discNumber ?? 1 }
-        let sortedDiscs = groupedTracks.keys.sorted()
         let filteredTracks = album.tracks.filter { track in
             searchText.isEmpty || track.title.lowercased().contains(searchText.lowercased())
         }
-        let filteredGroupedTracks = Dictionary(grouping: filteredTracks) { $0.discNumber ?? 1 }
+        let filteredGroupedTracks = Dictionary(grouping: filteredTracks) { $0.discNumber }
         let filteredSortedDiscs = filteredGroupedTracks.keys.sorted()
 
         return VStack(alignment: .leading) {
@@ -222,10 +220,9 @@ struct AlbumDetailView: View {
     }
     
     private func toggleFavorite(for track: Track) {
-        guard let context = try? modelContext else { return }
         track.favorite.toggle()
         do {
-            try context.save()
+            try modelContext.save()
         } catch {
             print("Failed to toggle favorite: \(error)")
         }

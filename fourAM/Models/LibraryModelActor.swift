@@ -1,23 +1,27 @@
+import Foundation
 import SwiftData
 
 actor LibraryModelActor {
     private let context: ModelContext
-
-    init(context: ModelContext) {
-        self.context = context
+    
+    init(modelDescriptor: ModelConfiguration) {
+        let container = try! ModelContainer(for: Track.self, configurations: modelDescriptor)
+        self.context = ModelContext(container)
     }
-
-    func deleteAllTracks() throws {
-        let fetchDescriptor = FetchDescriptor<Track>()
-        let allTracks = try context.fetch(fetchDescriptor)
-        for track in allTracks {
+    
+    func deleteAllTracks() async throws {
+        let descriptor = FetchDescriptor<Track>()
+        let tracks = try context.fetch(descriptor)
+        
+        for track in tracks {
             context.delete(track)
         }
+        
         try context.save()
     }
-
-    func fetchAllTracks() throws -> [Track] {
-        let fetchDescriptor = FetchDescriptor<Track>()
-        return try context.fetch(fetchDescriptor)
+    
+    func fetchAllTracks() async throws -> [Track] {
+        let descriptor = FetchDescriptor<Track>()
+        return try context.fetch(descriptor)
     }
 }

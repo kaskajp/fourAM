@@ -27,7 +27,7 @@ struct AlbumsView: View {
                         .textFieldStyle(PlainTextFieldStyle()) // Use a plain style for better integration
                         .frame(maxWidth: 200)
                         .focused($isSearchFieldFocused)
-                        .onChange(of: searchQuery) { newValue in
+                        .onChange(of: searchQuery) { oldValue, newValue in
                             filterAlbums()
                         }
                 }
@@ -73,10 +73,10 @@ struct AlbumsView: View {
         .onDisappear {
             keyMonitorManager.stopMonitoring()
         }
-        .onChange(of: debouncedSearchQuery) { newQuery in
+        .onChange(of: debouncedSearchQuery) { oldValue, newValue in
             filterAlbums()
         }
-        .onChange(of: libraryViewModel.tracks) { _ in
+        .onChange(of: libraryViewModel.tracks) { oldValue, newValue in
             Task {
                 await loadAlbums()
             }
