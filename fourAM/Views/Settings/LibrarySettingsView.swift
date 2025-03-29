@@ -19,6 +19,14 @@ struct LibrarySettingsView: View {
         libraryViewModel.tracks.count
     }
     
+    private var playedTracksCount: Int {
+        libraryViewModel.tracks.filter { $0.playCount > 0 }.count
+    }
+    
+    private var favoritedTracksCount: Int {
+        libraryViewModel.tracks.filter { $0.favorite }.count
+    }
+    
     private func formatFileSize(_ bytes: Int64) -> String {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
@@ -40,16 +48,42 @@ struct LibrarySettingsView: View {
                 VStack(spacing: 20) {
                     // Library Statistics Section
                     GroupBox {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("\(trackCount) tracks")
+                        HStack(spacing: 24) {
+                            VStack(alignment: .leading) {
+                                Text("Tracks")
                                     .foregroundColor(.secondary)
-                                Text("•")
-                                    .foregroundColor(.secondary)
-                                Text("\(albumCount) albums")
-                                    .foregroundColor(.secondary)
+                                    .font(.caption)
+                                Text("\(trackCount)")
+                                    .font(.title3)
+                                    .fontWeight(.medium)
                             }
-                            .font(.callout)
+                            
+                            VStack(alignment: .leading) {
+                                Text("Albums")
+                                    .foregroundColor(.secondary)
+                                    .font(.caption)
+                                Text("\(albumCount)")
+                                    .font(.title3)
+                                    .fontWeight(.medium)
+                            }
+                            
+                            VStack(alignment: .leading) {
+                                Text("Played tracks")
+                                    .foregroundColor(.secondary)
+                                    .font(.caption)
+                                Text("\(playedTracksCount)")
+                                    .font(.title3)
+                                    .fontWeight(.medium)
+                            }
+                            
+                            VStack(alignment: .leading) {
+                                Text("Loved tracks")
+                                    .foregroundColor(.secondary)
+                                    .font(.caption)
+                                Text("\(favoritedTracksCount)")
+                                    .font(.title3)
+                                    .fontWeight(.medium)
+                            }
                         }
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
