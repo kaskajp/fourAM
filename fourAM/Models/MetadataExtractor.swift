@@ -18,66 +18,27 @@ struct MetadataExtractor {
         let durationString = formatTime(durationSeconds)
         var genre = "Unknown Genre"
         
-        // Check for FLAC-specific metadata
-        if url.pathExtension.lowercased() == "flac" {
-            // Use TagLibWrapper to extract metadata for FLAC files
-            let flacMetadata = TagLibWrapper.extractMetadata(from: url)
-            
-            title = flacMetadata["title"] as? String ?? title
-            artist = flacMetadata["artist"] as? String ?? artist
-            albumArtist = flacMetadata["album artist"] as? String ?? albumArtist
-            album = flacMetadata["album"] as? String ?? album
-            trackNumber = flacMetadata["track number"] as? Int ?? trackNumber
-            discNumber = flacMetadata["disc number"] as? Int ?? discNumber
-            releaseYear = flacMetadata["releaseYear"] as? Int ?? releaseYear
-            if let artworkData = flacMetadata["artwork"] as? Data {
-                artwork = artworkData
-            }
-        } else {
-            // Batch-load common metadata to avoid redundant awaits
+        // Use TagLibWrapper to extract metadata for all audio files
+        let metadata = TagLibWrapper.extractMetadata(from: url)
+        
+        // Extract metadata from TagLib
+        title = metadata["title"] as? String ?? title
+        artist = metadata["artist"] as? String ?? artist
+        albumArtist = metadata["album artist"] as? String ?? albumArtist
+        album = metadata["album"] as? String ?? album
+        trackNumber = metadata["track number"] as? Int ?? trackNumber
+        discNumber = metadata["disc number"] as? Int ?? discNumber
+        releaseYear = metadata["releaseYear"] as? Int ?? releaseYear
+        genre = metadata["genre"] as? String ?? genre
+        if let artworkData = metadata["artwork"] as? Data {
+            artwork = artworkData
+        }
+        
+        // If TagLib didn't provide artwork, try to get it from AVAsset
+        if artwork == nil {
             let commonMetadata = try await asset.load(.commonMetadata)
             let metadataValues = try await loadMetadataValues(from: commonMetadata)
-            title = metadataValues["title"] as? String ?? title
-            artist = metadataValues["artist"] as? String ?? artist
-            album = metadataValues["albumName"] as? String ?? album
-            artwork = metadataValues["artwork"] as? Data ?? artwork
-            releaseYear = metadataValues["year"] as? Int ?? releaseYear
-            
-            // Batch-load available formats and metadata items
-            let availableFormats = try await asset.load(.availableMetadataFormats)
-            for format in availableFormats {
-                let metadataItems = try await asset.loadMetadata(for: format)
-                for item in metadataItems {
-                    guard let identifier = item.identifier?.rawValue else { continue }
-                    
-                    switch identifier {
-                    case let id where id.contains("trackNumber") || id.contains("TRCK"):
-                        trackNumber = try await parseTrackNumber(from: item)
-                    case let id where id.contains("discNumber") || id.contains("TPOS"):
-                        discNumber = try await parseDiscNumber(from: item)
-                    case let id where id.contains("TPE2"):
-                        albumArtist = try await item.load(.value) as? String ?? albumArtist
-                    case let id where id.contains("TCON"):
-                        if let rawValue = try await item.load(.value) {
-                            if let genreString = rawValue as? String {
-                                genre = genreString
-                            }
-                        }
-                    case let id where id.contains("TDRC"):
-                        if let rawValue = try await item.load(.value) {
-                            if let intValue = rawValue as? Int {
-                                releaseYear = intValue
-                            } else if let stringValue = rawValue as? String {
-                                if let year = Int(stringValue.prefix(4)) {
-                                    releaseYear = year
-                                }
-                            }
-                        }
-                    default:
-                        break
-                    }
-                }
-            }
+            artwork = metadataValues["artwork"] as? Data
         }
         
         return Track(

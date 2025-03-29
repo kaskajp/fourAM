@@ -88,6 +88,9 @@ struct AlbumsView: View {
                 await loadAlbums()
             }
         }
+        .task {
+            await loadAlbums()
+        }
         .navigationTitle("Albums")
     }
     

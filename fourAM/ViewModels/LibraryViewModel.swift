@@ -54,8 +54,9 @@ class LibraryViewModel: ObservableObject {
         do {
             try context.save()
             
-            // 3) Refresh local in-memory array
+            // 3) Refresh local in-memory array and clear cache
             self.tracks = LibraryHelper.fetchTracks(from: context)
+            clearAlbumsCache()
             
             print("Deleted album '\(album.name)' and its tracks from SwiftData.")
         } catch {
@@ -90,7 +91,10 @@ class LibraryViewModel: ObservableObject {
             
             // Update tracks on main actor
             self.tracks = LibraryHelper.fetchTracks(from: context)
-            print("Successfully saved \(tracks.count) new tracks to SwiftData.")
+            print("Successfully saved \(tracks.count) new tracks to SwiftData. Total tracks: \(self.tracks.count)")
+            
+            // Clear cache and force refresh only after tracks are saved
+            clearAlbumsCache()
             
             self.progress = 1.0
             self.currentPhase = ""
@@ -229,11 +233,141 @@ class LibraryViewModel: ObservableObject {
             return
         }
 
-        // Determine the folder path of the album
-        let folderPath = (firstTrackPath as NSString).deletingLastPathComponent
+        // Get the parent directory path (album folder)
+        let albumFolderPath = (firstTrackPath as NSString).deletingLastPathComponent
+
+        // Get the top level folder path and resolve security scope
+        guard let topLevelFolderPath = LibraryHelper.findTopLevelFolder(for: albumFolderPath),
+              let resolvedFolder = BookmarkManager.resolveBookmark(for: topLevelFolderPath) else {
+            print("Error: Cannot resolve security scope for folder")
+            return
+        }
+
+        // Start accessing the security-scoped resource
+        guard resolvedFolder.startAccessingSecurityScopedResource() else {
+            print("Error: Cannot access security-scoped resource")
+            return
+        }
+        defer { resolvedFolder.stopAccessingSecurityScopedResource() }
+
+        // Get the relative path from the top level folder to our target folder
+        let relativeSubPath = albumFolderPath.dropFirst(topLevelFolderPath.count)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let folderPath = "/" + resolvedFolder.appendingPathComponent(relativeSubPath, isDirectory: true).path
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         
+        // Clear cache before rescanning
+        clearAlbumsCache()
+        
+        // Store the album name for verification after rescan
+        let albumName = album.name
+        
+        // Delete the album first
         deleteAlbum(album, context: context)
-        loadLibrary(folderPath: folderPath, context: context)
+        
+        // Start scanning the folder
+        isScanning = true
+        progress = 0.0
+        currentPhase = "Rescanning album..."
+        
+        currentLoadTask = Task {
+            FileScanner.scanLibraryAsync(
+                folderPath: folderPath,
+                progressHandler: { [weak self] newProgress in
+                    Task { @MainActor in
+                        self?.progress = newProgress
+                    }
+                },
+                completion: { [weak self] files in
+                    guard let self = self else { return }
+                    
+                    Task {
+                        let totalFiles = files.count
+                        var processedFiles = 0
+                        let fileProcessingUpdateInterval = 10
+                        let semaphore = AsyncSemaphore(limit: 1)
+                        var newTracks: [Track] = []
+                        let thumbnailCache = ThumbnailCache()
+                        
+                        await MainActor.run {
+                            self.updatePhase("Processing files...")
+                            self.progress = 0.0
+                        }
+                        
+                        await withTaskGroup(of: Track?.self) { group in
+                            for url in files {
+                                if Task.isCancelled { break }
+                                
+                                group.addTask {
+                                    await semaphore.wait()
+                                    defer { Task { await semaphore.signal() } }
+                                    
+                                    do {
+                                        let audioFile = try await MetadataExtractor.extract(from: url)
+                                        
+                                        // Only process files that match the album name
+                                        if audioFile.album == albumName {
+                                            if !audioFile.album.isEmpty {
+                                                if let artwork = audioFile.artwork,
+                                                   NSImage(data: artwork) != nil {
+                                                    if let thumbnail = self.createThumbnail(from: artwork, maxDimension: 300) {
+                                                        await thumbnailCache.setThumbnail(thumbnail, for: audioFile.album)
+                                                    }
+                                                }
+                                            }
+                                            
+                                            return Track(
+                                                path: url.path,
+                                                url: url,
+                                                title: audioFile.title,
+                                                artist: audioFile.artist,
+                                                album: audioFile.album,
+                                                discNumber: audioFile.discNumber,
+                                                albumArtist: audioFile.albumArtist,
+                                                artwork: audioFile.artwork,
+                                                thumbnail: await thumbnailCache.getThumbnail(for: audioFile.album),
+                                                trackNumber: audioFile.trackNumber,
+                                                durationString: audioFile.durationString,
+                                                genre: audioFile.genre,
+                                                releaseYear: audioFile.releaseYear
+                                            )
+                                        }
+                                    } catch {
+                                        print("Error processing file \(url): \(error)")
+                                    }
+                                    return nil
+                                }
+                            }
+                            
+                            for await track in group {
+                                if Task.isCancelled { break }
+                                
+                                if let track = track {
+                                    newTracks.append(track)
+                                }
+                                processedFiles += 1
+                                
+                                if processedFiles % fileProcessingUpdateInterval == 0 || processedFiles == totalFiles {
+                                    let progressValue = Double(processedFiles) / Double(totalFiles)
+                                    await MainActor.run {
+                                        self.updateProgress(progressValue)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if !Task.isCancelled {
+                            await MainActor.run {
+                                self.saveTracksToContext(newTracks, context: context)
+                                self.isScanning = false
+                                self.progress = 1.0
+                                self.currentPhase = ""
+                            }
+                        }
+                    }
+                }
+            )
+        }
     }
     
     private func createThumbnail(from data: Data, maxDimension: CGFloat) -> Data? {
