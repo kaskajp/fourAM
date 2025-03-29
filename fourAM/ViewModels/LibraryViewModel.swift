@@ -60,6 +60,7 @@ class LibraryViewModel: ObservableObject {
         isScanning = true
         progress = 0.0
         currentPhase = "Scanning files..."
+        clearAlbumsCache() // Clear cache when loading new library
 
         // Allow the UI to update before starting the scanning process
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -224,6 +225,7 @@ class LibraryViewModel: ObservableObject {
     func refreshTracks(context: ModelContext) {
         self.tracks = LibraryHelper.fetchTracks(from: context)
         print("Tracks refreshed. Count: \(self.tracks.count)")
+        clearAlbumsCache() // Clear cache when tracks are refreshed
     }
     
     /// Return all albums for a particular artist, grouped by album name.
