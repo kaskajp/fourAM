@@ -112,13 +112,13 @@ struct ContentView: View {
                 }
                 .scrollPosition(id: $scrollPosition, anchor: .top)
                 .toolbar {
-                    ToolbarItem(placement: .navigation) {
+                    ToolbarItem(placement: .automatic) {
                         Button(action: pickFolder) {
                             Label("Add Folder", systemImage: "folder.badge.plus")
                         }
                     }
                     
-                    ToolbarItem(placement: .navigation) {
+                    ToolbarItem(placement: .automatic) {
                         Button {
                             showNewPlaylistSheet = true
                         } label: {

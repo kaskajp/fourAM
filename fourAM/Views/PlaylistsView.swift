@@ -44,7 +44,7 @@ struct PlaylistsView: View {
         }
         .navigationTitle("Playlists")
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(placement: .automatic) {
                 Button {
                     showNewPlaylistSheet = true
                 } label: {
