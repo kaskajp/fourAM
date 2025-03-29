@@ -8,6 +8,12 @@ class LibraryViewModel: ObservableObject {
     @Published var isScanning: Bool = false
     @Published var progress: Double = 0.0
     @Published var currentPhase: String = "Scanning files..."
+    @Published var isLoadingAlbums: Bool = false  // New loading state
+    
+    // Add cache for albums
+    private var albumsCache: [String: [Album]] = [:]
+    private var lastRefreshTime: Date?
+    private let cacheValidityDuration: TimeInterval = 300 // 5 minutes
     
     private init() {}
     
@@ -221,36 +227,91 @@ class LibraryViewModel: ObservableObject {
     }
     
     /// Return all albums for a particular artist, grouped by album name.
-    func albums(for artist: String) -> [Album] {
-        let artistTracks = tracks.filter { $0.artist == artist }
-        let grouped = Dictionary(grouping: artistTracks, by: \.album)
-
-        return grouped.map { (albumName, albumTracks) in
-            Album(
-                name: albumName,
-                albumArtist: albumTracks.first?.albumArtist,
-                artwork: albumTracks.first?.artwork,
-                thumbnail: albumTracks.first?.thumbnail,
-                tracks: albumTracks,
-                releaseYear: albumTracks.first?.releaseYear ?? 0,
-                genre: albumTracks.first?.genre ?? ""
-            )
+    func albums(for artist: String) async -> [Album] {
+        // Check cache first
+        if let cachedAlbums = albumsCache[artist],
+           let lastRefresh = lastRefreshTime,
+           Date().timeIntervalSince(lastRefresh) < cacheValidityDuration {
+            return cachedAlbums
         }
-        .sorted { $0.name < $1.name }
+        
+        // If not in cache or cache expired, load albums
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                self.isLoadingAlbums = true
+                
+                let artistTracks = self.tracks.filter { $0.artist == artist }
+                let grouped = Dictionary(grouping: artistTracks, by: \.album)
+                
+                let albums = grouped.map { (albumName, albumTracks) in
+                    Album(
+                        name: albumName,
+                        albumArtist: albumTracks.first?.albumArtist,
+                        artwork: albumTracks.first?.artwork,
+                        thumbnail: albumTracks.first?.thumbnail,
+                        tracks: albumTracks,
+                        releaseYear: albumTracks.first?.releaseYear ?? 0,
+                        genre: albumTracks.first?.genre ?? ""
+                    )
+                }
+                .sorted { $0.name < $1.name }
+                
+                // Update cache
+                self.albumsCache[artist] = albums
+                self.lastRefreshTime = Date()
+                self.isLoadingAlbums = false
+                
+                continuation.resume(returning: albums)
+            }
+        }
     }
     
     /// Return all albums across the entire library.
-    func allAlbums() -> [Album] {
-        let grouped = Dictionary(grouping: tracks, by: \.album)
-        var albums: [Album] = []
-
-        for (albumName, albumTracks) in grouped {
-            let coverArt = albumTracks.first?.artwork
-            let thumbnail = albumTracks.first?.thumbnail
-            albums.append(Album(name: albumName, albumArtist: albumTracks.first?.albumArtist, artwork: coverArt, thumbnail: thumbnail, tracks: albumTracks, releaseYear: albumTracks.first?.releaseYear ?? 0, genre: albumTracks.first?.genre ?? ""))
+    func allAlbums() async -> [Album] {
+        // Check cache first
+        if let cachedAlbums = albumsCache["_all"],
+           let lastRefresh = lastRefreshTime,
+           Date().timeIntervalSince(lastRefresh) < cacheValidityDuration {
+            return cachedAlbums
         }
-
-        return albums.sorted { $0.name < $1.name }
+        
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                self.isLoadingAlbums = true
+                
+                let grouped = Dictionary(grouping: self.tracks, by: \.album)
+                var albums: [Album] = []
+                
+                for (albumName, albumTracks) in grouped {
+                    let coverArt = albumTracks.first?.artwork
+                    let thumbnail = albumTracks.first?.thumbnail
+                    albums.append(Album(
+                        name: albumName,
+                        albumArtist: albumTracks.first?.albumArtist,
+                        artwork: coverArt,
+                        thumbnail: thumbnail,
+                        tracks: albumTracks,
+                        releaseYear: albumTracks.first?.releaseYear ?? 0,
+                        genre: albumTracks.first?.genre ?? ""
+                    ))
+                }
+                
+                let sortedAlbums = albums.sorted { $0.name < $1.name }
+                
+                // Update cache
+                self.albumsCache["_all"] = sortedAlbums
+                self.lastRefreshTime = Date()
+                self.isLoadingAlbums = false
+                
+                continuation.resume(returning: sortedAlbums)
+            }
+        }
+    }
+    
+    // Add method to clear cache if needed
+    func clearAlbumsCache() {
+        albumsCache.removeAll()
+        lastRefreshTime = nil
     }
     
     func incrementPlayCount(for track: Track, context: ModelContext) {

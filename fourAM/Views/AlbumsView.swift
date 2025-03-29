@@ -40,28 +40,35 @@ struct AlbumsView: View {
             .padding(.top, 16)
             .padding(.horizontal, 16)
 
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: coverImageSize), spacing: 16)], spacing: 16) {
-                    ForEach(filteredAlbums, id: \.id) { album in
-                        AlbumItemView(
-                            album: album,
-                            coverImageSize: coverImageSize,
-                            onAlbumSelected: onAlbumSelected,
-                            onDelete: {
-                                filterAlbums() // Refresh the filtered albums
-                            },
-                            modelContext: modelContext,
-                            libraryViewModel: libraryViewModel
-                        )
+            if libraryViewModel.isLoadingAlbums {
+                ProgressView("Loading albums...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: coverImageSize), spacing: 16)], spacing: 16) {
+                        ForEach(filteredAlbums, id: \.id) { album in
+                            AlbumItemView(
+                                album: album,
+                                coverImageSize: coverImageSize,
+                                onAlbumSelected: onAlbumSelected,
+                                onDelete: {
+                                    filterAlbums() // Refresh the filtered albums
+                                },
+                                modelContext: modelContext,
+                                libraryViewModel: libraryViewModel
+                            )
+                        }
                     }
+                    .padding()
                 }
-                .padding()
             }
         }
         .onAppear {
             keyMonitorManager.startMonitoring { isSearchFieldFocused }
-            filterAlbums() // Cache albums once
-            onSetRefreshAction?(filterAlbums) // Register filterAlbums as the refresh action
+            Task {
+                await loadAlbums()
+            }
+            onSetRefreshAction?({ Task { await loadAlbums() } }) // Wrap async function in synchronous closure
         }
         .onDisappear {
             keyMonitorManager.stopMonitoring()
@@ -70,21 +77,31 @@ struct AlbumsView: View {
             filterAlbums()
         }
         .onChange(of: libraryViewModel.tracks) { _ in
-            filterAlbums() // Reapply filters when tracks change
+            Task {
+                await loadAlbums()
+            }
         }
         .navigationTitle("Albums")
     }
     
-    private func filterAlbums() {
-        let albums = libraryViewModel.allAlbums() // Call once
-        if searchQuery.isEmpty {
-            filteredAlbums = albums
-        } else {
-            let lowercaseQuery = searchQuery.lowercased()
-            filteredAlbums = albums.filter { album in
-                album.name.lowercased().contains(lowercaseQuery) ||
-                album.albumArtist.lowercased().contains(lowercaseQuery)
+    private func loadAlbums() async {
+        let albums = await libraryViewModel.allAlbums()
+        await MainActor.run {
+            if searchQuery.isEmpty {
+                filteredAlbums = albums
+            } else {
+                let lowercaseQuery = searchQuery.lowercased()
+                filteredAlbums = albums.filter { album in
+                    album.name.lowercased().contains(lowercaseQuery) ||
+                    album.albumArtist.lowercased().contains(lowercaseQuery)
+                }
             }
+        }
+    }
+    
+    private func filterAlbums() {
+        Task {
+            await loadAlbums()
         }
     }
     
