@@ -498,6 +498,38 @@ class LibraryViewModel: ObservableObject {
         lastRefreshTime = nil
     }
     
+    // Add method to regenerate album art thumbnails
+    func regenerateAlbumArt(context: ModelContext) async {
+        await MainActor.run {
+            isLoadingAlbums = true
+        }
+        
+        let thumbnailCache = ThumbnailCache.shared
+        
+        // Process each track
+        for track in tracks {
+            if let artwork = track.artwork,
+               NSImage(data: artwork) != nil {
+                if let thumbnail = createThumbnail(from: artwork, maxDimension: 300) {
+                    await thumbnailCache.setThumbnail(thumbnail, for: track.album)
+                    await MainActor.run {
+                        track.thumbnail = thumbnail
+                    }
+                }
+            }
+        }
+        
+        // Save changes to SwiftData
+        try? context.save()
+        
+        // Clear albums cache and refresh tracks
+        await MainActor.run {
+            clearAlbumsCache()
+            refreshTracks(context: context)
+            isLoadingAlbums = false
+        }
+    }
+    
     func incrementPlayCount(for track: Track, context: ModelContext) {
         do {
             track.playCount += 1

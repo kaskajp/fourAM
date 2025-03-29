@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var selectedView: String? = nil
     @State private var selectedAlbum: Album? = nil
     @State private var refreshAction: (() -> Void)? = nil
+    @State private var scrollPosition: String? = nil
     
     // Group audio files by artist
     private var artistsDictionary: [String: [Track]] {
@@ -38,16 +39,13 @@ struct ContentView: View {
                             }
                             .padding(.vertical, 4)
                         }
+                        .id("processingSection")
+                        .onAppear {
+                            scrollPosition = "processingSection"
+                        }
                     }
                     
                     Section("Library") {
-                        /*NavigationLink(value: "ArtistsView") {
-                            HStack(spacing: 4) {
-                                Image(systemName: "music.microphone")
-                                    .foregroundColor(.indigo)
-                                Text("Artists")
-                            }
-                        }*/
                         NavigationLink(value: "AlbumsView") {
                             HStack(spacing: 4) {
                                 Image(systemName: "square.stack")
@@ -55,13 +53,6 @@ struct ContentView: View {
                                 Text("Albums")
                             }
                         }
-                        /*NavigationLink(value: "TracksView") {
-                            HStack(spacing: 4) {
-                                Image(systemName: "music.note.list")
-                                    .foregroundColor(.indigo)
-                                Text("Tracks")
-                            }
-                        }*/
                     }
                     
                     Section("Playlists") {
@@ -74,6 +65,7 @@ struct ContentView: View {
                         }
                     }
                 }
+                .scrollPosition(id: $scrollPosition, anchor: .top)
                 .toolbar {
                     ToolbarItem(placement: .navigation) {
                         Button(action: pickFolder) {
@@ -81,7 +73,7 @@ struct ContentView: View {
                         }
                     }
                 }
-                .frame(minWidth: 180) 
+                .frame(minWidth: 180)
             } detail: {
                 if selectedView == "AlbumsView" {
                     AlbumsView(
