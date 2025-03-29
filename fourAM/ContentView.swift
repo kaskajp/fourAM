@@ -21,6 +21,8 @@ struct ContentView: View {
     @State private var refreshAction: (() -> Void)? = nil
     @State private var scrollPosition: String? = nil
     @State private var showNewPlaylistSheet = false
+    @State private var showRenamePlaylistSheet = false
+    @State private var playlistToRename: Playlist? = nil
     @Query private var playlists: [Playlist]
     
     // Group audio files by artist
@@ -83,6 +85,13 @@ struct ContentView: View {
                                 }
                             }
                             .contextMenu {
+                                Button {
+                                    playlistToRename = playlist
+                                    showRenamePlaylistSheet = true
+                                } label: {
+                                    Label("Rename Playlist", systemImage: "pencil")
+                                }
+
                                 Button(role: .destructive) {
                                     // If this playlist is currently selected, switch to AlbumsView
                                     if selectedView.contains(.playlist(playlist)) {
@@ -119,6 +128,16 @@ struct ContentView: View {
                 }
                 .sheet(isPresented: $showNewPlaylistSheet) {
                     NewPlaylistSheet(track: nil)
+                }
+                .sheet(isPresented: $showRenamePlaylistSheet) {
+                    if let playlist = playlistToRename {
+                        RenamePlaylistSheet(playlist: playlist)
+                    }
+                }
+                .onChange(of: showRenamePlaylistSheet) { _, isPresented in
+                    if !isPresented {
+                        playlistToRename = nil
+                    }
                 }
                 .frame(minWidth: 180)
             } detail: {

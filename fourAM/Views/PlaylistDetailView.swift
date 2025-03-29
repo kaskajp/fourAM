@@ -3,9 +3,12 @@ import SwiftData
 
 struct PlaylistDetailView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     var playlist: Playlist
     @State private var selectedTrack: Track? = nil
     @State private var playTask: Task<Void, Never>?
+    @State private var playlistToRename: Playlist?
+    @State private var showRenamePlaylistSheet = false
     
     var body: some View {
         List(playlist.tracks, selection: $selectedTrack) { track in
@@ -63,15 +66,46 @@ struct PlaylistDetailView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
+                    Button {
+                        playlistToRename = playlist
+                        showRenamePlaylistSheet = true
+                    } label: {
+                        Label("Rename Playlist", systemImage: "pencil")
+                    }
+
                     Button(role: .destructive) {
                         playlist.tracks.removeAll()
                         try? modelContext.save()
                     } label: {
                         Label("Clear Playlist", systemImage: "trash")
                     }
+                    
+                    Divider()
+                    
+                    Button(role: .destructive) {
+                        // Remove all tracks from the playlist first
+                        playlist.tracks.removeAll()
+                        // Delete the playlist
+                        modelContext.delete(playlist)
+                        try? modelContext.save()
+                        // Dismiss the detail view since the playlist no longer exists
+                        dismiss()
+                    } label: {
+                        Label("Delete Playlist", systemImage: "trash.fill")
+                    }
                 } label: {
                     Image(systemName: "ellipsis")
                 }
+            }
+        }
+        .sheet(isPresented: $showRenamePlaylistSheet) {
+            if let playlist = playlistToRename {
+                RenamePlaylistSheet(playlist: playlist)
+            }
+        }
+        .onChange(of: showRenamePlaylistSheet) { _, isPresented in
+            if !isPresented {
+                playlistToRename = nil
             }
         }
     }
