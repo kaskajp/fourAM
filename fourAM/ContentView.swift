@@ -2,16 +2,26 @@ import SwiftUI
 import SwiftData
 import AppKit // Needed for NSOpenPanel on macOS
 
+// Define the possible selection values
+enum SelectionValue: Hashable {
+    case albums
+    case albumDetail(Album)
+    case favoriteTracks
+    case playlist(Playlist)
+}
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
 
     @StateObject private var libraryViewModel = LibraryViewModel.shared
     @ObservedObject var playbackManager = PlaybackManager.shared
     
-    @State private var selectedView: String? = nil
+    @State private var selectedView: Set<SelectionValue> = []
     @State private var selectedAlbum: Album? = nil
     @State private var refreshAction: (() -> Void)? = nil
     @State private var scrollPosition: String? = nil
+    @State private var showNewPlaylistSheet = false
+    @Query private var playlists: [Playlist]
     
     // Group audio files by artist
     private var artistsDictionary: [String: [Track]] {
@@ -46,7 +56,7 @@ struct ContentView: View {
                     }
                     
                     Section("Library") {
-                        NavigationLink(value: "AlbumsView") {
+                        NavigationLink(value: SelectionValue.albums) {
                             HStack(spacing: 4) {
                                 Image(systemName: "square.stack")
                                     .foregroundColor(.indigo)
@@ -56,11 +66,37 @@ struct ContentView: View {
                     }
                     
                     Section("Playlists") {
-                        NavigationLink(value: "FavoriteTracksView") {
+                        NavigationLink(value: SelectionValue.favoriteTracks) {
                             HStack(spacing: 4) {
                                 Image(systemName: "heart.fill")
                                     .foregroundColor(.indigo)
                                 Text("Favorite Tracks")
+                            }
+                        }
+                        
+                        ForEach(playlists) { playlist in
+                            NavigationLink(value: SelectionValue.playlist(playlist)) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "music.note.list")
+                                        .foregroundColor(.indigo)
+                                    Text(playlist.name)
+                                }
+                            }
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    // If this playlist is currently selected, switch to AlbumsView
+                                    if selectedView.contains(.playlist(playlist)) {
+                                        selectedView = [.albums]
+                                    }
+                                    
+                                    // Remove all tracks from the playlist first
+                                    playlist.tracks.removeAll()
+                                    // Delete the playlist
+                                    modelContext.delete(playlist)
+                                    try? modelContext.save()
+                                } label: {
+                                    Label("Delete Playlist", systemImage: "trash")
+                                }
                             }
                         }
                     }
@@ -72,41 +108,55 @@ struct ContentView: View {
                             Label("Add Folder", systemImage: "folder.badge.plus")
                         }
                     }
+                    
+                    ToolbarItem(placement: .navigation) {
+                        Button {
+                            showNewPlaylistSheet = true
+                        } label: {
+                            Label("New Playlist", systemImage: "plus")
+                        }
+                    }
+                }
+                .sheet(isPresented: $showNewPlaylistSheet) {
+                    NewPlaylistSheet(track: nil)
                 }
                 .frame(minWidth: 180)
             } detail: {
-                if selectedView == "AlbumsView" {
-                    AlbumsView(
-                        libraryViewModel: libraryViewModel,
-                        onAlbumSelected: { album in
-                            selectedAlbum = album
-                            selectedView = "AlbumDetailView"
-                        },
-                        onSetRefreshAction: { action in
-                            refreshAction = action
+                Group {
+                    if let selection = selectedView.first {
+                        switch selection {
+                        case .albums:
+                            AlbumsView(
+                                libraryViewModel: libraryViewModel,
+                                onAlbumSelected: { album in
+                                    selectedAlbum = album
+                                    selectedView = [.albumDetail(album)]
+                                },
+                                onSetRefreshAction: { action in
+                                    refreshAction = action
+                                }
+                            )
+                        case .albumDetail(let album):
+                            AlbumDetailView(
+                                album: album,
+                                onBack: {
+                                    selectedView = [.albums]
+                                },
+                                modelContext: .init(\.modelContext),
+                                libraryViewModel: libraryViewModel,
+                                dismiss: .init(\.dismiss)
+                            )
+                        case .favoriteTracks:
+                            FavoriteTracksView(libraryViewModel: libraryViewModel)
+                        case .playlist(let playlist):
+                            PlaylistDetailView(playlist: playlist)
                         }
-                    )
-                } else if selectedView == "AlbumDetailView", let album = selectedAlbum {
-                    AlbumDetailView(
-                        album: album,
-                        onBack: {
-                            selectedView = "AlbumsView" // Navigate back to AlbumsView
-                        },
-                        modelContext: .init(\.modelContext),
-                        libraryViewModel: libraryViewModel,
-                        dismiss: .init(\.dismiss)
-                    )
-                } else if selectedView == "ArtistsView" {
-                    ArtistsView(libraryViewModel: libraryViewModel)
-                } else if selectedView == "TracksView" {
-                    TracksView(libraryViewModel: libraryViewModel)
-                } else if selectedView == "FavoriteTracksView" {
-                    FavoriteTracksView(libraryViewModel: libraryViewModel)
-                } else {
-                    AlbumsView(libraryViewModel: libraryViewModel, onAlbumSelected: { album in
-                        selectedAlbum = album
-                        selectedView = "AlbumDetailView"
-                    })
+                    } else {
+                        AlbumsView(libraryViewModel: libraryViewModel, onAlbumSelected: { album in
+                            selectedAlbum = album
+                            selectedView = [.albumDetail(album)]
+                        })
+                    }
                 }
             }
 
@@ -194,7 +244,7 @@ struct ContentView: View {
                         print("Scanning complete. Found \(totalFiles) audio files.")
                         libraryViewModel.loadLibrary(folderPath: selectedFolder.path, context: modelContext)
                         
-                        if selectedView == "AlbumsView" {
+                        if selectedView.contains(.albums) {
                             refreshAction?() // Trigger refresh if AlbumsView is active
                         }
                     }

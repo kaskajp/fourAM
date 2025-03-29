@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SwiftData
 
 struct AlbumDetailView: View {
     let album: Album
@@ -7,12 +8,14 @@ struct AlbumDetailView: View {
 
     @Environment(\.modelContext) var modelContext
     @ObservedObject var libraryViewModel: LibraryViewModel
-    @StateObject private var keyMonitorManager = KeyMonitorManager()
+    @ObservedObject private var keyMonitorManager = KeyMonitorManager.shared
     @FocusState private var isSearchFieldFocused: Bool
     @Environment(\.dismiss) var dismiss // Replace presentationMode with dismiss
     @State private var searchText: String = "" // To manage the search input
     @State private var selectedTrack: Track? = nil
     @State private var playTask: Task<Void, Never>?
+    @State private var showNewPlaylistSheet = false
+    @State private var trackToAddToNewPlaylist: Track? = nil
     
     var body: some View {
         // Group and sort tracks
@@ -216,6 +219,35 @@ struct AlbumDetailView: View {
             .contextMenu {
                 Button("Reset Play Count") {
                     libraryViewModel.resetPlayCountForTrack(for: track, context: modelContext)
+                }
+                
+                Divider()
+                
+                Menu("Add to Playlist") {
+                    let playlists = (try? modelContext.fetch(FetchDescriptor<Playlist>())) ?? []
+                    
+                    ForEach(playlists) { playlist in
+                        Button {
+                            playlist.addTrack(track)
+                            try? modelContext.save()
+                        } label: {
+                            Label(playlist.name, systemImage: "music.note.list")
+                        }
+                    }
+                    
+                    if playlists.isEmpty {
+                        Text("No Playlists")
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Divider()
+                    
+                    Button {
+                        showNewPlaylistSheet = true
+                        trackToAddToNewPlaylist = track
+                    } label: {
+                        Label("New Playlist...", systemImage: "plus")
+                    }
                 }
             }
         }

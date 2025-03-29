@@ -4,7 +4,7 @@ import AppKit
 
 struct AlbumsView: View {
     @ObservedObject var libraryViewModel: LibraryViewModel
-    @StateObject private var keyMonitorManager = KeyMonitorManager()
+    @ObservedObject private var keyMonitorManager = KeyMonitorManager.shared
     var onAlbumSelected: ((Album) -> Void)? = nil
     var onSetRefreshAction: ((@escaping () -> Void) -> Void)?
     @Environment(\.modelContext) private var modelContext

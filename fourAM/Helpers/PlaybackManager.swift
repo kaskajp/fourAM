@@ -3,8 +3,9 @@ import AVFoundation
 import SwiftUI
 import Combine
 import SwiftData
+import AppKit
 
-class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
+@objc class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     static let shared = PlaybackManager()
     private var audioPlayer: AVAudioPlayer?
     private var modelContext: ModelContext?
@@ -39,6 +40,16 @@ class PlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
     }
 
     private var timer: Timer?
+
+    // MARK: - Global Hotkey Control
+
+    func disableGlobalHotkey() {
+        KeyMonitorManager.shared.disableGlobalHotkey()
+    }
+
+    func enableGlobalHotkey() {
+        KeyMonitorManager.shared.enableGlobalHotkey()
+    }
 
     // MARK: - Playback Controls
 

@@ -19,6 +19,7 @@ class Track: Equatable {
     var releaseYear: Int
     var playCount: Int = 0
     var favorite: Bool = false
+    @Relationship(deleteRule: .nullify) var playlists: [Playlist]
 
     init(
         path: String,
@@ -52,6 +53,7 @@ class Track: Equatable {
         self.releaseYear = releaseYear
         self.playCount = playCount
         self.favorite = favorite
+        self.playlists = []
     }
     
     static func == (lhs: Track, rhs: Track) -> Bool {
