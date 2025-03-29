@@ -8,12 +8,22 @@ struct LibrarySettingsView: View {
     @State private var libraryActor: LibraryModelActor
     @State private var showAlert = false // Controls the alert for confirmation
     @State private var isClearing = false
-    @State private var showThumbnailCacheAlert = false
-    @State private var isClearingThumbnails = false
-    @State private var showRegenerateAlert = false
-    @State private var isRegenerating = false
     
     @EnvironmentObject var libraryViewModel: LibraryViewModel // Access ViewModel globally
+    
+    private var albumCount: Int {
+        Set(libraryViewModel.tracks.map(\.album)).count
+    }
+    
+    private var trackCount: Int {
+        libraryViewModel.tracks.count
+    }
+    
+    private func formatFileSize(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
     
     init(modelContext: ModelContext) {
         // Initialize the actor with the model context's container configuration
@@ -26,74 +36,66 @@ struct LibrarySettingsView: View {
 
     var body: some View {
         ZStack {
-            VStack {
-                if isClearing {
-                    ProgressView("Clearing Library...")
-                        .padding()
-                } else {
-                    Form {
-                        /*HStack {
-                            TextField("Default Library Path", text: $defaultLibraryPath)
-                            Button("Browse...") {
-                                chooseFolder()
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Library Statistics Section
+                    GroupBox {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("\(trackCount) tracks")
+                                    .foregroundColor(.secondary)
+                                Text("•")
+                                    .foregroundColor(.secondary)
+                                Text("\(albumCount) albums")
+                                    .foregroundColor(.secondary)
                             }
-                        }*/
-
-                        // Clear Library Button
-                        Section {
+                            .font(.callout)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } label: {
+                        Text("Library Statistics")
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity)
+                    
+                    // Library Management Section
+                    GroupBox {
+                        VStack(alignment: .leading, spacing: 16) {
+                            /*HStack {
+                                TextField("Default Library Path", text: $defaultLibraryPath)
+                                Button("Browse...") {
+                                    chooseFolder()
+                                }
+                            }*/
+                            
                             Button(role: .destructive) {
-                                showAlert = true // Trigger the alert
+                                showAlert = true
                             } label: {
                                 Text("Clear Library")
                             }
+                            .help("Remove all tracks from your library")
                         }
-                        
-                        // Clear Thumbnail Cache Button
-                        Section {
-                            Button(role: .destructive) {
-                                showThumbnailCacheAlert = true
-                            } label: {
-                                Text("Clear Thumbnail Cache")
-                            }
-                            
-                            Button {
-                                showRegenerateAlert = true
-                            } label: {
-                                Text("Regenerate Album Art")
-                            }
-                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } label: {
+                        Text("Library Management")
+                            .font(.headline)
                     }
-                    .padding()
+                    .frame(maxWidth: .infinity)
                 }
-            }
-            .navigationTitle("Library")
-            .alert("Clear Library", isPresented: $showAlert) {
-                Button("Clear", role: .destructive, action: clearLibrary) // Clear action
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Are you sure you want to clear the library? This action cannot be undone.")
-            }
-            .alert("Clear Thumbnail Cache", isPresented: $showThumbnailCacheAlert) {
-                Button("Clear", role: .destructive, action: clearThumbnailCache)
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Are you sure you want to clear the thumbnail cache? This will require thumbnails to be regenerated when viewing albums.")
-            }
-            .alert("Regenerate Album Art", isPresented: $showRegenerateAlert) {
-                Button("Regenerate", action: regenerateAlbumArt)
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This will regenerate all album art thumbnails. This may take a few moments.")
+                .padding()
+                .frame(maxWidth: .infinity)
             }
             
-            if isRegenerating {
+            if isClearing {
                 Color(.windowBackgroundColor)
                     .ignoresSafeArea()
                 
                 VStack(spacing: 20) {
                     ProgressView()
                         .scaleEffect(2.0)
-                    Text("Regenerating Album Art...")
+                    Text("Clearing Library...")
                         .font(.title2)
                         .fontWeight(.semibold)
                     Text("This may take a few moments")
@@ -101,6 +103,13 @@ struct LibrarySettingsView: View {
                         .foregroundColor(.secondary)
                 }
             }
+        }
+        .navigationTitle("Library")
+        .alert("Clear Library", isPresented: $showAlert) {
+            Button("Clear", role: .destructive, action: clearLibrary)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to clear the library? This action cannot be undone.")
         }
     }
 
@@ -131,41 +140,6 @@ struct LibrarySettingsView: View {
                     self.isClearing = false
                     print("Failed to clear library: \(error)")
                 }
-            }
-        }
-    }
-
-    private func clearThumbnailCache() {
-        isClearingThumbnails = true
-        Task {
-            // Clear file system cache
-            await ThumbnailCache.shared.clearCache()
-            
-            // Clear SwiftData thumbnails
-            for track in libraryViewModel.tracks {
-                track.thumbnail = nil
-            }
-            
-            // Save changes to SwiftData
-            try? modelContext.save()
-            
-            // Refresh the tracks to update the UI
-            libraryViewModel.refreshTracks(context: modelContext)
-            
-            await MainActor.run {
-                self.isClearingThumbnails = false
-                print("Thumbnail cache cleared successfully.")
-            }
-        }
-    }
-
-    private func regenerateAlbumArt() {
-        isRegenerating = true
-        Task {
-            await libraryViewModel.regenerateAlbumArt(context: modelContext)
-            await MainActor.run {
-                self.isRegenerating = false
-                print("Album art regenerated successfully.")
             }
         }
     }

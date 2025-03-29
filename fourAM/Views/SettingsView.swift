@@ -21,9 +21,9 @@ struct SettingsView: View {
                     Label("Output", systemImage: "speaker.wave.2")
                 }*/
             
-            AppearanceSettingsView()
+            ArtworkSettingsView()
                 .tabItem {
-                    Label("Appearance", systemImage: "paintpalette")
+                    Label("Artwork", systemImage: "photo.artframe")
                 }
         }
         .frame(width: 500, height: 400) // Adjust the size of the settings window

@@ -38,6 +38,23 @@ actor ThumbnailCache {
             print("Error clearing thumbnail cache: \(error)")
         }
     }
+    
+    func getCacheSize() async -> Int64 {
+        do {
+            let files = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.fileSizeKey])
+            return try files.reduce(0) { total, file in
+                let attributes = try file.resourceValues(forKeys: [.fileSizeKey])
+                return total + Int64(attributes.fileSize ?? 0)
+            }
+        } catch {
+            print("Error calculating cache size: \(error)")
+            return 0
+        }
+    }
+    
+    func getCachePath() async -> String {
+        return cacheDirectory.path
+    }
 }
 
 // Helper extension to create hash of strings
