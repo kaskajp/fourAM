@@ -15,13 +15,27 @@ class LibraryViewModel: ObservableObject {
     private var lastRefreshTime: Date?
     private let cacheValidityDuration: TimeInterval = 300 // 5 minutes
     
+    // Add task tracking
+    private var currentScanTask: Task<Void, Never>?
+    private var currentLoadTask: Task<Void, Never>?
+    
     private init() {}
+    
+    deinit {
+        // Cancel any ongoing tasks
+        currentScanTask?.cancel()
+        currentLoadTask?.cancel()
+    }
     
     func selectAlbum(_ album: Album) {
         selectedAlbum = album
     }
     
     func deleteAlbum(_ album: Album, context: ModelContext) {
+        // Cancel any ongoing tasks before deleting
+        currentScanTask?.cancel()
+        currentLoadTask?.cancel()
+        
         // 1) For each track in this album, remove it from SwiftData
         for track in album.tracks {
             // We identify each track in SwiftData by its `path` or other unique property
@@ -99,30 +113,36 @@ class LibraryViewModel: ObservableObject {
     /// Asynchronously scan a folder, extract metadata, and save new tracks to SwiftData.
     @MainActor
     func loadLibrary(folderPath: String, context: ModelContext) {
+        // Cancel any existing tasks
+        currentScanTask?.cancel()
+        currentLoadTask?.cancel()
+        
         isScanning = true
         progress = 0.0
         currentPhase = "Scanning files..."
-        clearAlbumsCache() // Clear cache when loading new library
+        clearAlbumsCache()
 
-        // Allow the UI to update before starting the scanning process
-        Task {
+        currentLoadTask = Task {
             // Get existing paths before starting the scan
             let existingPaths = self.fetchExistingPaths(context: context)
             
             FileScanner.scanLibraryAsync(
                 folderPath: folderPath,
-                progressHandler: { newProgress in
+                progressHandler: { [weak self] newProgress in
                     Task { @MainActor in
-                        self.progress = newProgress // Scanning contributes to the first phase
+                        self?.progress = newProgress
                     }
                 },
-                completion: { files in
+                completion: { [weak self] files in
+                    guard let self = self else { return }
+                    
                     Task {
                         let totalFiles = files.count
                         var processedFiles = 0
                         let fileProcessingUpdateInterval = 10
                         let semaphore = AsyncSemaphore(limit: 1)
                         var newTracks: [Track] = []
+                        let thumbnailCache = ThumbnailCache()
                         
                         await MainActor.run {
                             self.updatePhase("Processing files...")
@@ -130,9 +150,9 @@ class LibraryViewModel: ObservableObject {
                         }
                         
                         await withTaskGroup(of: Track?.self) { group in
-                            let thumbnailCache = ThumbnailCache()
-                            
                             for url in files {
+                                if Task.isCancelled { break }
+                                
                                 group.addTask {
                                     await semaphore.wait()
                                     defer { Task { await semaphore.signal() } }
@@ -142,12 +162,10 @@ class LibraryViewModel: ObservableObject {
                                         
                                         if !existingPaths.contains(url.path) {
                                             if !audioFile.album.isEmpty {
-                                                if await thumbnailCache.getThumbnail(for: audioFile.album) == nil,
-                                                   let artwork = audioFile.artwork {
-                                                    if NSImage(data: artwork) != nil {
-                                                        if let thumbnail = self.createThumbnail(from: artwork, maxDimension: 300) {
-                                                            await thumbnailCache.setThumbnail(thumbnail, for: audioFile.album)
-                                                        }
+                                                if let artwork = audioFile.artwork,
+                                                   NSImage(data: artwork) != nil {
+                                                    if let thumbnail = self.createThumbnail(from: artwork, maxDimension: 300) {
+                                                        await thumbnailCache.setThumbnail(thumbnail, for: audioFile.album)
                                                     }
                                                 }
                                             }
@@ -176,6 +194,8 @@ class LibraryViewModel: ObservableObject {
                             }
                             
                             for await track in group {
+                                if Task.isCancelled { break }
+                                
                                 if let track = track {
                                     newTracks.append(track)
                                 }
@@ -190,9 +210,10 @@ class LibraryViewModel: ObservableObject {
                             }
                         }
                         
-                        // Save tracks on main actor
-                        await MainActor.run {
-                            self.saveTracksToContext(newTracks, context: context)
+                        if !Task.isCancelled {
+                            await MainActor.run {
+                                self.saveTracksToContext(newTracks, context: context)
+                            }
                         }
                     }
                 }

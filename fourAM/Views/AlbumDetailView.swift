@@ -6,13 +6,14 @@ struct AlbumDetailView: View {
     let onBack: () -> Void // Closure to handle the back button action
 
     @Environment(\.modelContext) var modelContext
-    @ObservedObject var libraryViewModel = LibraryViewModel.shared
+    @ObservedObject var libraryViewModel: LibraryViewModel
     @StateObject private var keyMonitorManager = KeyMonitorManager()
     @FocusState private var isSearchFieldFocused: Bool
     @Environment(\.dismiss) var dismiss // Replace presentationMode with dismiss
     @State private var searchText: String = "" // To manage the search input
-    @State private var selectedTrack: Track? // Track currently selected
-
+    @State private var selectedTrack: Track? = nil
+    @State private var playTask: Task<Void, Never>?
+    
     var body: some View {
         // Group and sort tracks
         let filteredTracks = album.tracks.filter { track in
@@ -141,6 +142,7 @@ struct AlbumDetailView: View {
         }
         .onDisappear {
             keyMonitorManager.stopMonitoring()
+            playTask?.cancel()
         }
     }
     
@@ -239,10 +241,15 @@ struct AlbumDetailView: View {
     }
     
     private func playFirstTrack() {
-        guard let firstTrack = album.tracks.sorted(by: { $0.trackNumber < $1.trackNumber }).first else {
-            print("No tracks available to play.")
-            return
+        playTask?.cancel()
+        playTask = Task {
+            guard let firstTrack = album.tracks.sorted(by: { $0.trackNumber < $1.trackNumber }).first else {
+                print("No tracks available to play.")
+                return
+            }
+            await MainActor.run {
+                PlaybackManager.shared.play(track: firstTrack, tracks: PlaybackManager.shared.playQueue)
+            }
         }
-        PlaybackManager.shared.play(track: firstTrack, tracks: PlaybackManager.shared.playQueue)
     }
 }

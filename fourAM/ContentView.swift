@@ -75,7 +75,7 @@ struct ContentView: View {
                     }
                 }
                 .toolbar {
-                    ToolbarItem {
+                    ToolbarItem(placement: .navigation) {
                         Button(action: pickFolder) {
                             Label("Add Folder", systemImage: "folder.badge.plus")
                         }
@@ -95,9 +95,15 @@ struct ContentView: View {
                         }
                     )
                 } else if selectedView == "AlbumDetailView", let album = selectedAlbum {
-                    AlbumDetailView(album: album) {
-                        selectedView = "AlbumsView" // Navigate back to AlbumsView
-                    }
+                    AlbumDetailView(
+                        album: album,
+                        onBack: {
+                            selectedView = "AlbumsView" // Navigate back to AlbumsView
+                        },
+                        modelContext: .init(\.modelContext),
+                        libraryViewModel: libraryViewModel,
+                        dismiss: .init(\.dismiss)
+                    )
                 } else if selectedView == "ArtistsView" {
                     ArtistsView(libraryViewModel: libraryViewModel)
                 } else if selectedView == "TracksView" {

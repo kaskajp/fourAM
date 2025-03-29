@@ -3,7 +3,7 @@ import SwiftData
 import AppKit
 
 struct AlbumsView: View {
-    @ObservedObject var libraryViewModel = LibraryViewModel.shared
+    @ObservedObject var libraryViewModel: LibraryViewModel
     @StateObject private var keyMonitorManager = KeyMonitorManager()
     var onAlbumSelected: ((Album) -> Void)? = nil
     var onSetRefreshAction: ((@escaping () -> Void) -> Void)?
@@ -13,8 +13,9 @@ struct AlbumsView: View {
     @State private var debouncedSearchQuery: String = ""
     @StateObject private var timerManager = TimerManager()
     @State private var filteredAlbums: [Album] = [] // Filtered albums
+    @State private var loadAlbumsTask: Task<Void, Never>?
     @FocusState private var isSearchFieldFocused: Bool
-
+    
     var body: some View {
         VStack {
             HStack {
@@ -65,19 +66,25 @@ struct AlbumsView: View {
         }
         .onAppear {
             keyMonitorManager.startMonitoring { isSearchFieldFocused }
-            Task {
+            loadAlbumsTask = Task {
                 await loadAlbums()
             }
-            onSetRefreshAction?({ Task { await loadAlbums() } }) // Wrap async function in synchronous closure
+            onSetRefreshAction?({
+                Task {
+                    await loadAlbums()
+                }
+            })
         }
         .onDisappear {
             keyMonitorManager.stopMonitoring()
+            loadAlbumsTask?.cancel()
         }
         .onChange(of: debouncedSearchQuery) { oldValue, newValue in
             filterAlbums()
         }
         .onChange(of: libraryViewModel.tracks) { oldValue, newValue in
-            Task {
+            loadAlbumsTask?.cancel()
+            loadAlbumsTask = Task {
                 await loadAlbums()
             }
         }
@@ -100,7 +107,8 @@ struct AlbumsView: View {
     }
     
     private func filterAlbums() {
-        Task {
+        loadAlbumsTask?.cancel()
+        loadAlbumsTask = Task {
             await loadAlbums()
         }
     }
@@ -192,3 +200,4 @@ struct AlbumItemView: View {
         NSWorkspace.shared.open(subfolderURL.deletingLastPathComponent())
     }
 }
+
