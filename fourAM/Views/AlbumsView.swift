@@ -9,42 +9,15 @@ struct AlbumsView: View {
     var onSetRefreshAction: ((@escaping () -> Void) -> Void)?
     @Environment(\.modelContext) private var modelContext
     @AppStorage("coverImageSize") private var coverImageSize: Double = 120.0
-    @State private var searchQuery: String = "" // Search query for filtering albums
-    @State private var debouncedSearchQuery: String = ""
-    @StateObject private var timerManager = TimerManager()
-    @State private var filteredAlbums: [Album] = [] // Filtered albums
+    @State private var albums: [Album] = [] // All albums
     @State private var loadAlbumsTask: Task<Void, Never>?
-    @FocusState private var isSearchFieldFocused: Bool
     
     var body: some View {
         VStack {
-            HStack {
-                Spacer() // Push the search field to the right
-                
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray) // Set the color of the icon
-                    TextField("Search Albums or Artists", text: $searchQuery)
-                        .textFieldStyle(PlainTextFieldStyle()) // Use a plain style for better integration
-                        .frame(maxWidth: 200)
-                        .focused($isSearchFieldFocused)
-                        .onChange(of: searchQuery) { oldValue, newValue in
-                            filterAlbums()
-                        }
-                }
-                .padding(8) // Add padding around the field
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.gray.opacity(0.2)) // Light gray background
-                )
-            }
-            .padding(.top, 16)
-            .padding(.horizontal, 16)
-
             if libraryViewModel.isLoadingAlbums {
                 ProgressView("Loading albums...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if filteredAlbums.isEmpty {
+            } else if albums.isEmpty {
                 VStack(spacing: 20) {
                     Image(systemName: "music.note.list")
                         .font(.system(size: 40))
@@ -53,11 +26,6 @@ struct AlbumsView: View {
                     Text("No albums found")
                         .font(.title2)
                         .foregroundColor(.secondary)
-                    
-                    if !searchQuery.isEmpty {
-                        Text("Try adjusting your search criteria")
-                            .foregroundColor(.secondary)
-                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -67,13 +35,15 @@ struct AlbumsView: View {
                         columns: [GridItem(.adaptive(minimum: coverImageSize, maximum: coverImageSize + 20), spacing: 16)], 
                         spacing: 16
                     ) {
-                        ForEach(filteredAlbums, id: \.id) { album in
+                        ForEach(albums, id: \.id) { album in
                             AlbumItemView(
                                 album: album,
                                 coverImageSize: coverImageSize,
                                 onAlbumSelected: onAlbumSelected,
                                 onDelete: {
-                                    filterAlbums() // Refresh the filtered albums
+                                    Task {
+                                        await loadAlbums() // Refresh the albums
+                                    }
                                 },
                                 modelContext: modelContext,
                                 libraryViewModel: libraryViewModel
@@ -85,7 +55,7 @@ struct AlbumsView: View {
             }
         }
         .onAppear {
-            keyMonitorManager.startMonitoring { isSearchFieldFocused }
+            keyMonitorManager.startMonitoring { false }
             loadAlbumsTask = Task {
                 await loadAlbums()
             }
@@ -98,9 +68,6 @@ struct AlbumsView: View {
         .onDisappear {
             keyMonitorManager.stopMonitoring()
             loadAlbumsTask?.cancel()
-        }
-        .onChange(of: debouncedSearchQuery) { oldValue, newValue in
-            filterAlbums()
         }
         .onChange(of: libraryViewModel.tracks) { oldValue, newValue in
             loadAlbumsTask?.cancel()
@@ -115,35 +82,11 @@ struct AlbumsView: View {
     }
     
     private func loadAlbums() async {
-        let albums = await libraryViewModel.allAlbums()
+        let allAlbums = await libraryViewModel.allAlbums()
         
         await MainActor.run {
-            if searchQuery.isEmpty {
-                filteredAlbums = albums
-                print("Loaded \(albums.count) albums")
-            } else {
-                let lowercaseQuery = searchQuery.lowercased()
-                filteredAlbums = albums.filter { album in
-                    album.name.lowercased().contains(lowercaseQuery) ||
-                    album.albumArtist.lowercased().contains(lowercaseQuery)
-                }
-                print("Filtered to \(filteredAlbums.count) albums")
-            }
-        }
-    }
-    
-    private func filterAlbums() {
-        loadAlbumsTask?.cancel()
-        loadAlbumsTask = Task {
-            await loadAlbums()
-        }
-    }
-    
-    private func onSearchQueryChange() {
-        timerManager.debounce(interval: 0.3) {
-            DispatchQueue.main.async {
-                debouncedSearchQuery = searchQuery
-            }
+            albums = allAlbums
+            print("Loaded \(albums.count) albums")
         }
     }
 }
