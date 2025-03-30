@@ -6,10 +6,10 @@ struct SettingsView: View {
     
     var body: some View {
         TabView {
-            /*GeneralSettingsView()
+            GeneralSettingsView()
                 .tabItem {
                     Label("General", systemImage: "gear")
-                }*/
+                }
             
             LibrarySettingsView(modelContext: modelContext)
                 .tabItem {
