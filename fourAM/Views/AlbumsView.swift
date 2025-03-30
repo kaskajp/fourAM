@@ -182,115 +182,165 @@ struct AlbumItemView: View {
             let metaByPathURL = URL(fileURLWithPath: metaAppPath)
             if FileManager.default.fileExists(atPath: metaAppPath) {
                 print("Found Meta at: \(metaAppPath)")
-                openTracksWithMetaApp(album: album, metaURL: metaByPathURL)
+                openAlbumFolderInMeta(album: album, metaURL: metaByPathURL)
             } else {
                 print("Meta app not found at \(metaAppPath)")
             }
             return
         }
         
-        openTracksWithMetaApp(album: album, metaURL: metaURL)
+        openAlbumFolderInMeta(album: album, metaURL: metaURL)
     }
     
-    private func openTracksWithMetaApp(album: Album, metaURL: URL) {
-        // Try to get the first track to open the folder instead of individual files
+    private func openAlbumFolderInMeta(album: Album, metaURL: URL) {
+        // Get the first track to find the folder
         guard let firstTrack = album.tracks.first else { return }
         let fullTrackPath = firstTrack.path
         
-        guard let topLevelFolderPath = LibraryHelper.findTopLevelFolder(for: fullTrackPath),
-              let resolvedFolder = BookmarkManager.resolveBookmark(for: topLevelFolderPath),
-              resolvedFolder.startAccessingSecurityScopedResource() else {
-            print("Cannot resolve security scope.")
+        guard let topLevelFolderPath = LibraryHelper.findTopLevelFolder(for: fullTrackPath) else {
+            print("Error: Cannot find top level folder for path \(fullTrackPath)")
+            showFolderPermissionError()
             return
         }
         
-        // Make sure to stop accessing the security scoped resource when done
-        defer { resolvedFolder.stopAccessingSecurityScopedResource() }
-        
-        // Get file paths for all tracks in the album
-        let filePaths = album.tracks.compactMap { track -> String? in
-            let trackPath = track.path
-            let relativeSubPath = trackPath.dropFirst(topLevelFolderPath.count)
-                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            let fullURL = resolvedFolder.appendingPathComponent(relativeSubPath, isDirectory: false)
-            return fullURL.path
+        guard let resolvedFolder = BookmarkManager.resolveBookmark(for: topLevelFolderPath) else {
+            print("Error: Cannot resolve bookmark for folder \(topLevelFolderPath)")
+            
+            // Attempt to fix the bookmark by re-adding
+            tryToAddPermissionsForAlbum(album)
+            return
         }
         
-        // Create a temporary shell script to open the files in Meta
-        let tempDir = FileManager.default.temporaryDirectory
-        let scriptURL = tempDir.appendingPathComponent("open_in_meta.sh")
-        
-        // Build script content
-        var scriptContent = "#!/bin/bash\n"
-        scriptContent += "# Open music files in Meta\n"
-        scriptContent += "open -a \"\(metaURL.path)\"\n"
-        scriptContent += "sleep 1\n" // Give Meta time to launch
-        
-        // Add each file to be opened
-        let escapedFilePaths = filePaths.map { path in
-            return "'\(path.replacingOccurrences(of: "'", with: "'\\''"))'"
+        // Start accessing security scoped resource
+        guard resolvedFolder.startAccessingSecurityScopedResource() else {
+            print("Error: Cannot access security scoped resource for folder \(topLevelFolderPath)")
+            
+            // Attempt to fix the bookmark by re-adding
+            tryToAddPermissionsForAlbum(album)
+            return
         }
-        scriptContent += "open -a \"\(metaURL.path)\" \(escapedFilePaths.joined(separator: " "))\n"
         
+        // Find the album folder path 
+        let relativeSubPath = fullTrackPath.dropFirst(topLevelFolderPath.count)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let trackURL = resolvedFolder.appendingPathComponent(relativeSubPath, isDirectory: false)
+        let albumFolderURL = trackURL.deletingLastPathComponent()
+        
+        print("Opening album folder in Meta: \(albumFolderURL.path)")
+        
+        // Create temporary bookmark for folder access
         do {
-            // Write the script to a temporary file
-            try scriptContent.write(to: scriptURL, atomically: true, encoding: .utf8)
+            try BookmarkManager.storeBookmark(for: albumFolderURL)
             
-            // Make the script executable
-            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
-            
-            // Execute the script
-            let task = Process()
-            task.executableURL = URL(fileURLWithPath: "/bin/bash")
-            task.arguments = [scriptURL.path]
-            
-            let pipe = Pipe()
-            task.standardOutput = pipe
-            task.standardError = pipe
-            
-            print("Executing script to open files in Meta")
-            try task.run()
-            
-            // Read output for debugging
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8), !output.isEmpty {
-                print("Script output: \(output)")
-            }
-            
-            // Clean up the temporary script
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                try? FileManager.default.removeItem(at: scriptURL)
-            }
-            
-        } catch {
-            print("Error executing script: \(error)")
-            
-            // Fallback to the dialog approach
-            let folderURL = resolvedFolder.appendingPathComponent(
-                fullTrackPath.dropFirst(topLevelFolderPath.count)
-                    .trimmingCharacters(in: CharacterSet(charactersIn: "/")),
-                isDirectory: false
-            ).deletingLastPathComponent()
-            
-            // Simply launch Meta
+            // First launch Meta
             NSWorkspace.shared.open(metaURL)
             
-            // Show fallback alert dialog with instructions
+            // Then wait a moment for Meta to launch fully
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                do {
+                    // Ensure we can open the folder with full permissions
+                    if let folderBookmark = BookmarkManager.resolveBookmark(for: albumFolderURL.path), 
+                       folderBookmark.startAccessingSecurityScopedResource() {
+                        
+                        // Create configuration to activate Meta when opening
+                        let configuration = NSWorkspace.OpenConfiguration()
+                        configuration.activates = true
+                        
+                        // Open the album folder directly in Meta
+                        NSWorkspace.shared.open([folderBookmark], withApplicationAt: metaURL, configuration: configuration)
+                        
+                        // Stop accessing the security scoped resource after a delay
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            folderBookmark.stopAccessingSecurityScopedResource()
+                            resolvedFolder.stopAccessingSecurityScopedResource()
+                        }
+                    } else {
+                        // Fallback to Finder if Meta can't access the folder
+                        print("Error: Meta cannot access folder \(albumFolderURL.path)")
+                        self.showFolderPermissionError()
+                        resolvedFolder.stopAccessingSecurityScopedResource()
+                    }
+                } catch {
+                    print("Error opening folder in Meta: \(error)")
+                    resolvedFolder.stopAccessingSecurityScopedResource()
+                    self.showFolderPermissionError()
+                }
+            }
+        } catch {
+            print("Error creating bookmark for album folder: \(error)")
+            resolvedFolder.stopAccessingSecurityScopedResource()
+            showFolderPermissionError()
+        }
+    }
+    
+    // Helper function to show folder permission error with Finder fallback
+    private func showFolderPermissionError() {
+        DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "Could not automatically open files in Meta"
-            alert.informativeText = "Meta has been launched. Please manually open the files:\n\n1. In Meta, select File > Open\n2. Navigate to this folder: \(folderURL.path)\n3. Select all tracks and click Open\n\nFolder path has been copied to clipboard for convenience."
-            alert.addButton(withTitle: "OK")
-            alert.addButton(withTitle: "Open Folder in Finder")
+            alert.messageText = "Folder Access Error"
+            alert.informativeText = "4AM doesn't have permission to access this folder in Meta. Would you like to open it in Finder instead?"
+            alert.addButton(withTitle: "Open in Finder")
+            alert.addButton(withTitle: "Cancel")
             
-            // Copy folder path to clipboard
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(folderURL.path, forType: .string)
+            if alert.runModal() == .alertFirstButtonReturn && 
+               album.tracks.first != nil {
+                // Open in Finder as fallback
+                self.showAlbumInFinder(album)
+            }
+        }
+    }
+    
+    // Helper function to try to add permissions for an album
+    private func tryToAddPermissionsForAlbum(_ album: Album) {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "Folder Permission Required"
+            alert.informativeText = "4AM needs permission to access the folder containing this album. Would you like to grant access now?"
+            alert.addButton(withTitle: "Grant Access")
+            alert.addButton(withTitle: "Cancel")
             
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                let response = alert.runModal()
-                if response == NSApplication.ModalResponse.alertSecondButtonReturn {
-                    NSWorkspace.shared.open(folderURL)
+            if alert.runModal() == .alertFirstButtonReturn {
+                // Show open panel to get user to select the folder again
+                let panel = NSOpenPanel()
+                panel.canChooseDirectories = true
+                panel.canChooseFiles = false
+                panel.allowsMultipleSelection = false
+                panel.message = "Select the folder containing the album '\(album.name)'"
+                
+                if panel.runModal() == .OK, let selectedFolder = panel.url {
+                    do {
+                        // Store bookmark with enhanced permissions and check the result
+                        let permissionsGranted = try BookmarkManager.storeSecureAccessForFolder(at: selectedFolder)
+                        
+                        if permissionsGranted {
+                            print("Successfully granted permissions for folder: \(selectedFolder.path)")
+                            
+                            // Try opening again after permissions granted
+                            let metaURLFromBundle = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.nightbirdsevolve.Meta")
+                            let metaURL = metaURLFromBundle ?? URL(fileURLWithPath: "/Applications/Meta.app")
+                            
+                            // Check if the Meta app exists at the path
+                            if FileManager.default.fileExists(atPath: metaURL.path) {
+                                self.openAlbumFolderInMeta(album: album, metaURL: metaURL)
+                            } else {
+                                print("Meta app not found at path: \(metaURL.path)")
+                            }
+                        } else {
+                            print("Failed to obtain permissions for folder: \(selectedFolder.path)")
+                            // Show an error message
+                            let failureAlert = NSAlert()
+                            failureAlert.messageText = "Permission Error"
+                            failureAlert.informativeText = "Could not obtain permissions for the selected folder."
+                            failureAlert.runModal()
+                        }
+                    } catch {
+                        print("Error granting folder access: \(error)")
+                        // Show the error to the user
+                        let errorAlert = NSAlert()
+                        errorAlert.messageText = "Permission Error"
+                        errorAlert.informativeText = "An error occurred while trying to access the folder: \(error.localizedDescription)"
+                        errorAlert.runModal()
+                    }
                 }
             }
         }
