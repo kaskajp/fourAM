@@ -540,6 +540,20 @@ struct ContentView: View {
             PlaybackManager.shared.setModelContext(modelContext)
             libraryViewModel.tracks = LibraryHelper.fetchTracks(from: modelContext)
             print("Library loaded on appear with \(libraryViewModel.tracks.count) tracks")
+            
+            // Setup notification observers for menu commands
+            NotificationCenter.default.addObserver(forName: Notification.Name("MenuAddFolder"), object: nil, queue: .main) { _ in
+                pickFolder()
+            }
+            
+            NotificationCenter.default.addObserver(forName: Notification.Name("MenuNewPlaylist"), object: nil, queue: .main) { _ in
+                showNewPlaylistSheet = true
+            }
+        }
+        .onDisappear {
+            // Remove notification observers
+            NotificationCenter.default.removeObserver(self, name: Notification.Name("MenuAddFolder"), object: nil)
+            NotificationCenter.default.removeObserver(self, name: Notification.Name("MenuNewPlaylist"), object: nil)
         }
     }
 
