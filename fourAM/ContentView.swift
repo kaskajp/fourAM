@@ -181,7 +181,7 @@ struct ContentView: View {
                                             .foregroundColor(.gray)
                                             .font(.system(size: 12))
                                         
-                                        TextField("Search (min 3 chars)", text: $appState.globalSearchQuery)
+                                        TextField("Search", text: $appState.globalSearchQuery)
                                             .textFieldStyle(PlainTextFieldStyle())
                                             .font(.system(size: 13))
                                             .frame(width: 200)
@@ -246,7 +246,7 @@ struct ContentView: View {
                                             .foregroundColor(.gray)
                                             .font(.system(size: 12))
                                         
-                                        TextField("Search (min 3 chars)", text: $appState.globalSearchQuery)
+                                        TextField("Search", text: $appState.globalSearchQuery)
                                             .textFieldStyle(PlainTextFieldStyle())
                                             .font(.system(size: 13))
                                             .frame(width: 200)
@@ -303,7 +303,7 @@ struct ContentView: View {
                                             .foregroundColor(.gray)
                                             .font(.system(size: 12))
                                         
-                                        TextField("Search (min 3 chars)", text: $appState.globalSearchQuery)
+                                        TextField("Search", text: $appState.globalSearchQuery)
                                             .textFieldStyle(PlainTextFieldStyle())
                                             .font(.system(size: 13))
                                             .frame(width: 200)
@@ -360,7 +360,7 @@ struct ContentView: View {
                                             .foregroundColor(.gray)
                                             .font(.system(size: 12))
                                         
-                                        TextField("Search (min 3 chars)", text: $appState.globalSearchQuery)
+                                        TextField("Search", text: $appState.globalSearchQuery)
                                             .textFieldStyle(PlainTextFieldStyle())
                                             .font(.system(size: 13))
                                             .frame(width: 200)
@@ -423,7 +423,7 @@ struct ContentView: View {
                                             .foregroundColor(.gray)
                                             .font(.system(size: 12))
                                         
-                                        TextField("Search (min 3 chars)", text: $appState.globalSearchQuery)
+                                        TextField("Search", text: $appState.globalSearchQuery)
                                             .textFieldStyle(PlainTextFieldStyle())
                                             .font(.system(size: 13))
                                             .frame(width: 200)
@@ -481,7 +481,7 @@ struct ContentView: View {
                                         .foregroundColor(.gray)
                                         .font(.system(size: 12))
                                     
-                                    TextField("Search (min 3 chars)", text: $appState.globalSearchQuery)
+                                    TextField("Search", text: $appState.globalSearchQuery)
                                         .textFieldStyle(PlainTextFieldStyle())
                                         .font(.system(size: 13))
                                         .frame(width: 200)

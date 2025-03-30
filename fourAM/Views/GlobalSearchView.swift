@@ -78,7 +78,7 @@ struct GlobalSearchView: View {
                 .foregroundColor(.gray)
                 .font(.system(size: 12))
             
-            TextField("Search (min 3 chars)", text: $appState.globalSearchQuery)
+            TextField("Search", text: $appState.globalSearchQuery)
                 .textFieldStyle(PlainTextFieldStyle())
                 .focused($isSearchFieldFocused)
                 .font(.system(size: 13))
