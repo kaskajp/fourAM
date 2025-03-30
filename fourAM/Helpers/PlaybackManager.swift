@@ -64,13 +64,62 @@ import AppKit
             return
         }
 
+        // Normalize path
+        let normalizedPath = trackURL.path.replacingOccurrences(of: "//", with: "/")
+        let fileManager = FileManager.default
+        
+        // First check if file exists (helps with debugging)
+        if !fileManager.fileExists(atPath: normalizedPath) {
+            print("Error: File does not exist at path: \(normalizedPath)")
+            return
+        }
+
         // Resolve the bookmark for the file
         if let resolvedURL = BookmarkManager.resolveBookmark(for: trackURL.path) {
-            guard resolvedURL.startAccessingSecurityScopedResource() else {
-                print("Failed to start security scope for \(resolvedURL.path)")
-                return
+            // Find parent folder that has security scope access
+            let parentFolders = BookmarkManager.allStoredFolderPaths().filter { folderPath in
+                // Normalize paths to handle potential double slashes
+                let normalizedFolder = folderPath.replacingOccurrences(of: "//", with: "/")
+                return normalizedPath.hasPrefix(normalizedFolder) && normalizedPath != normalizedFolder
+            }.sorted(by: { $0.count > $1.count }) // Sort by length to get the most specific parent
+            
+            // Collection to track opened security scopes that will need to be closed
+            var securityScopesToClose: [URL] = []
+            
+            // Try to open security scope for parent folders from most specific to most general
+            var parentScopeSuccess = false
+            for parentPath in parentFolders {
+                if let parentURL = BookmarkManager.resolveBookmark(for: parentPath) {
+                    if parentURL.startAccessingSecurityScopedResource() {
+                        securityScopesToClose.append(parentURL)
+                        parentScopeSuccess = true
+                        print("Successfully accessed security scope for parent: \(parentURL.path)")
+                    }
+                }
             }
-            defer { resolvedURL.stopAccessingSecurityScopedResource() }
+            
+            // Try to access security scope for the file itself
+            var fileScopeSuccess = false
+            if resolvedURL.startAccessingSecurityScopedResource() {
+                securityScopesToClose.append(resolvedURL)
+                fileScopeSuccess = true
+                print("Successfully accessed security scope for file: \(resolvedURL.path)")
+            } else {
+                print("Failed to start security scope for \(resolvedURL.path)")
+            }
+            
+            // Ensure we close all security scopes when done
+            defer {
+                for url in securityScopesToClose {
+                    url.stopAccessingSecurityScopedResource()
+                    print("Stopped accessing security scope for: \(url.path)")
+                }
+            }
+            
+            // If we couldn't get security scope, we might still try to play as fallback
+            if !parentScopeSuccess && !fileScopeSuccess {
+                print("Warning: Attempting to play file without security scope as fallback.")
+            }
 
             // Attempt to play the file
             do {
@@ -97,9 +146,50 @@ import AppKit
                 print("Playing \(track.title)")
             } catch {
                 print("Failed to play track: \(error)")
+                
+                // If play failed, try to auto-repair bookmark
+                do {
+                    try BookmarkManager.storeBookmark(for: resolvedURL)
+                    print("Re-created bookmark for \(resolvedURL.path)")
+                } catch {
+                    print("Failed to re-create bookmark: \(error)")
+                }
             }
         } else {
-            print("No valid security bookmark for \(track.path)")
+            print("No valid security bookmark for \(trackURL.path)")
+            
+            // As a last resort, try with direct URL
+            let directURL = URL(fileURLWithPath: normalizedPath)
+            if fileManager.fileExists(atPath: directURL.path) {
+                do {
+                    try BookmarkManager.storeBookmark(for: directURL)
+                    print("Created new bookmark for \(directURL.path)")
+                    
+                    // Try again with the newly created bookmark
+                    if let newResolvedURL = BookmarkManager.resolveBookmark(for: directURL.path) {
+                        if newResolvedURL.startAccessingSecurityScopedResource() {
+                            defer { newResolvedURL.stopAccessingSecurityScopedResource() }
+                            
+                            audioPlayer = try AVAudioPlayer(contentsOf: newResolvedURL)
+                            audioPlayer?.delegate = self
+                            audioPlayer?.play()
+                            
+                            currentTrack = track
+                            isPlaying = true
+                            
+                            if let index = tracks.firstIndex(where: { $0.path == track.path }) {
+                                currentIndex = index
+                            }
+                            
+                            startTimer()
+                            updateQueue(with: tracks)
+                            print("Playing \(track.title) (with new bookmark)")
+                        }
+                    }
+                } catch {
+                    print("Failed to create new bookmark: \(error)")
+                }
+            }
         }
     }
 
