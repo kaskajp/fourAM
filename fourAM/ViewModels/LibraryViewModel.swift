@@ -550,4 +550,44 @@ class LibraryViewModel: ObservableObject {
             print("Failed to reset play count: \(error)")
         }
     }
+    
+    // Global search functionality
+    @MainActor
+    func performGlobalSearch(query: String) async {
+        guard !query.isEmpty else {
+            AppState.shared.clearSearch()
+            return
+        }
+        
+        AppState.shared.isSearching = true
+        let lowercaseQuery = query.lowercased()
+        
+        // Search for albums
+        let allAlbumsList = await allAlbums()
+        let matchingAlbums = allAlbumsList.filter { album in
+            album.name.lowercased().contains(lowercaseQuery) ||
+            album.albumArtist.lowercased().contains(lowercaseQuery) ||
+            album.genre.lowercased().contains(lowercaseQuery)
+        }
+        
+        // Search for tracks
+        let matchingTracks = tracks.filter { track in
+            track.title.lowercased().contains(lowercaseQuery) ||
+            track.artist.lowercased().contains(lowercaseQuery) ||
+            track.album.lowercased().contains(lowercaseQuery) ||
+            (track.genre?.lowercased().contains(lowercaseQuery) ?? false)
+        }
+        
+        // Update the search results
+        let results = SearchResults(
+            albums: matchingAlbums,
+            tracks: matchingTracks
+        )
+        
+        // Update AppState with results
+        AppState.shared.searchResults = results
+        AppState.shared.isSearching = false
+        
+        print("Global search for '\(query)' found \(matchingAlbums.count) albums and \(matchingTracks.count) tracks")
+    }
 }

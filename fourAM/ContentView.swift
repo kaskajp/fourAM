@@ -8,14 +8,12 @@ enum SelectionValue: Hashable {
     case albumDetail(Album)
     case favoriteTracks
     case playlist(Playlist)
+    case searchResults
 }
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-
-    @StateObject private var libraryViewModel = LibraryViewModel.shared
-    @ObservedObject var playbackManager = PlaybackManager.shared
-    
+    @ObservedObject private var appState = AppState.shared
     @State private var selectedView: Set<SelectionValue> = []
     @State private var selectedAlbum: Album? = nil
     @State private var refreshAction: (() -> Void)? = nil
@@ -24,6 +22,9 @@ struct ContentView: View {
     @State private var showRenamePlaylistSheet = false
     @State private var playlistToRename: Playlist? = nil
     @Query private var playlists: [Playlist]
+    @StateObject private var libraryViewModel = LibraryViewModel.shared
+    @State private var searchDebounceTask: Task<Void, Never>?
+    @ObservedObject var playbackManager = PlaybackManager.shared
     
     // Group audio files by artist
     private var artistsDictionary: [String: [Track]] {
@@ -155,6 +156,64 @@ struct ContentView: View {
                                     refreshAction = action
                                 }
                             )
+                            .toolbar {
+                                ToolbarItemGroup(placement: .automatic) {
+                                    // Custom search implementation
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "magnifyingglass")
+                                            .foregroundColor(.gray)
+                                            .font(.system(size: 12))
+                                        
+                                        TextField("Search", text: $appState.globalSearchQuery)
+                                            .textFieldStyle(PlainTextFieldStyle())
+                                            .font(.system(size: 13))
+                                            .frame(width: 200)
+                                            .onSubmit {
+                                                performGlobalSearch()
+                                                
+                                                // Navigate to search results when hitting Enter
+                                                if !appState.globalSearchQuery.isEmpty {
+                                                    selectedView = [.searchResults]
+                                                }
+                                            }
+                                            .onChange(of: appState.globalSearchQuery) { _, newValue in
+                                                searchDebounceTask?.cancel()
+                                                searchDebounceTask = Task {
+                                                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
+                                                    if !Task.isCancelled {
+                                                        await performGlobalSearch()
+                                                    }
+                                                }
+                                            }
+                                        
+                                        if !appState.globalSearchQuery.isEmpty {
+                                            Button {
+                                                appState.clearSearch()
+                                            } label: {
+                                                Image(systemName: "xmark.circle.fill")
+                                                    .foregroundColor(.gray)
+                                                    .font(.system(size: 12))
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
+                                        }
+                                    }
+                                    .padding(6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.gray.opacity(0.2))
+                                    )
+                                    
+                                    // Show search results button when there are results
+                                    if !appState.searchResults.isEmpty {
+                                        Button {
+                                            selectedView = [.searchResults]
+                                        } label: {
+                                            Text("\(appState.searchResults.totalCount) results")
+                                                .font(.system(size: 12))
+                                        }
+                                    }
+                                }
+                            }
                         case .albumDetail(let album):
                             AlbumDetailView(
                                 album: album,
@@ -165,16 +224,311 @@ struct ContentView: View {
                                 libraryViewModel: libraryViewModel,
                                 dismiss: .init(\.dismiss)
                             )
+                            .toolbar {
+                                ToolbarItemGroup(placement: .automatic) {
+                                    // Custom search implementation
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "magnifyingglass")
+                                            .foregroundColor(.gray)
+                                            .font(.system(size: 12))
+                                        
+                                        TextField("Search", text: $appState.globalSearchQuery)
+                                            .textFieldStyle(PlainTextFieldStyle())
+                                            .font(.system(size: 13))
+                                            .frame(width: 200)
+                                            .onSubmit {
+                                                performGlobalSearch()
+                                                
+                                                // Navigate to search results when hitting Enter
+                                                if !appState.globalSearchQuery.isEmpty {
+                                                    selectedView = [.searchResults]
+                                                }
+                                            }
+                                            .onChange(of: appState.globalSearchQuery) { _, newValue in
+                                                searchDebounceTask?.cancel()
+                                                searchDebounceTask = Task {
+                                                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
+                                                    if !Task.isCancelled {
+                                                        await performGlobalSearch()
+                                                    }
+                                                }
+                                            }
+                                        
+                                        if !appState.globalSearchQuery.isEmpty {
+                                            Button {
+                                                appState.clearSearch()
+                                            } label: {
+                                                Image(systemName: "xmark.circle.fill")
+                                                    .foregroundColor(.gray)
+                                                    .font(.system(size: 12))
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
+                                        }
+                                    }
+                                    .padding(6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.gray.opacity(0.2))
+                                    )
+                                    
+                                    // Show search results button when there are results
+                                    if !appState.searchResults.isEmpty {
+                                        Button {
+                                            selectedView = [.searchResults]
+                                        } label: {
+                                            Text("\(appState.searchResults.totalCount) results")
+                                                .font(.system(size: 12))
+                                        }
+                                    }
+                                }
+                            }
                         case .favoriteTracks:
                             FavoriteTracksView(libraryViewModel: libraryViewModel)
+                            .toolbar {
+                                ToolbarItemGroup(placement: .automatic) {
+                                    // Custom search implementation
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "magnifyingglass")
+                                            .foregroundColor(.gray)
+                                            .font(.system(size: 12))
+                                        
+                                        TextField("Search", text: $appState.globalSearchQuery)
+                                            .textFieldStyle(PlainTextFieldStyle())
+                                            .font(.system(size: 13))
+                                            .frame(width: 200)
+                                            .onSubmit {
+                                                performGlobalSearch()
+                                                
+                                                // Navigate to search results when hitting Enter
+                                                if !appState.globalSearchQuery.isEmpty {
+                                                    selectedView = [.searchResults]
+                                                }
+                                            }
+                                            .onChange(of: appState.globalSearchQuery) { _, newValue in
+                                                searchDebounceTask?.cancel()
+                                                searchDebounceTask = Task {
+                                                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
+                                                    if !Task.isCancelled {
+                                                        await performGlobalSearch()
+                                                    }
+                                                }
+                                            }
+                                        
+                                        if !appState.globalSearchQuery.isEmpty {
+                                            Button {
+                                                appState.clearSearch()
+                                            } label: {
+                                                Image(systemName: "xmark.circle.fill")
+                                                    .foregroundColor(.gray)
+                                                    .font(.system(size: 12))
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
+                                        }
+                                    }
+                                    .padding(6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.gray.opacity(0.2))
+                                    )
+                                    
+                                    // Show search results button when there are results
+                                    if !appState.searchResults.isEmpty {
+                                        Button {
+                                            selectedView = [.searchResults]
+                                        } label: {
+                                            Text("\(appState.searchResults.totalCount) results")
+                                                .font(.system(size: 12))
+                                        }
+                                    }
+                                }
+                            }
                         case .playlist(let playlist):
                             PlaylistDetailView(playlist: playlist)
+                            .toolbar {
+                                ToolbarItemGroup(placement: .automatic) {
+                                    // Custom search implementation
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "magnifyingglass")
+                                            .foregroundColor(.gray)
+                                            .font(.system(size: 12))
+                                        
+                                        TextField("Search", text: $appState.globalSearchQuery)
+                                            .textFieldStyle(PlainTextFieldStyle())
+                                            .font(.system(size: 13))
+                                            .frame(width: 200)
+                                            .onSubmit {
+                                                performGlobalSearch()
+                                                
+                                                // Navigate to search results when hitting Enter
+                                                if !appState.globalSearchQuery.isEmpty {
+                                                    selectedView = [.searchResults]
+                                                }
+                                            }
+                                            .onChange(of: appState.globalSearchQuery) { _, newValue in
+                                                searchDebounceTask?.cancel()
+                                                searchDebounceTask = Task {
+                                                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
+                                                    if !Task.isCancelled {
+                                                        await performGlobalSearch()
+                                                    }
+                                                }
+                                            }
+                                        
+                                        if !appState.globalSearchQuery.isEmpty {
+                                            Button {
+                                                appState.clearSearch()
+                                            } label: {
+                                                Image(systemName: "xmark.circle.fill")
+                                                    .foregroundColor(.gray)
+                                                    .font(.system(size: 12))
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
+                                        }
+                                    }
+                                    .padding(6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.gray.opacity(0.2))
+                                    )
+                                    
+                                    // Show search results button when there are results
+                                    if !appState.searchResults.isEmpty {
+                                        Button {
+                                            selectedView = [.searchResults]
+                                        } label: {
+                                            Text("\(appState.searchResults.totalCount) results")
+                                                .font(.system(size: 12))
+                                        }
+                                    }
+                                }
+                            }
+                        case .searchResults:
+                            // Show the new SearchResultsView
+                            SearchResultsView(
+                                onAlbumSelected: { album in
+                                    selectedAlbum = album
+                                    selectedView = [.albumDetail(album)]
+                                }
+                            )
+                            .toolbar {
+                                ToolbarItemGroup(placement: .automatic) {
+                                    // Custom search implementation
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "magnifyingglass")
+                                            .foregroundColor(.gray)
+                                            .font(.system(size: 12))
+                                        
+                                        TextField("Search", text: $appState.globalSearchQuery)
+                                            .textFieldStyle(PlainTextFieldStyle())
+                                            .font(.system(size: 13))
+                                            .frame(width: 200)
+                                            .onSubmit {
+                                                performGlobalSearch()
+                                                
+                                                // Navigate to search results when hitting Enter
+                                                if !appState.globalSearchQuery.isEmpty {
+                                                    selectedView = [.searchResults]
+                                                }
+                                            }
+                                            .onChange(of: appState.globalSearchQuery) { _, newValue in
+                                                searchDebounceTask?.cancel()
+                                                searchDebounceTask = Task {
+                                                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
+                                                    if !Task.isCancelled {
+                                                        await performGlobalSearch()
+                                                    }
+                                                }
+                                            }
+                                        
+                                        if !appState.globalSearchQuery.isEmpty {
+                                            Button {
+                                                appState.clearSearch()
+                                            } label: {
+                                                Image(systemName: "xmark.circle.fill")
+                                                    .foregroundColor(.gray)
+                                                    .font(.system(size: 12))
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
+                                        }
+                                    }
+                                    .padding(6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.gray.opacity(0.2))
+                                    )
+                                    
+                                    // Show results count on search results page
+                                    if !appState.searchResults.isEmpty {
+                                        Text("\(appState.searchResults.totalCount) results")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
                         }
                     } else {
                         AlbumsView(libraryViewModel: libraryViewModel, onAlbumSelected: { album in
                             selectedAlbum = album
                             selectedView = [.albumDetail(album)]
                         })
+                        .toolbar {
+                            ToolbarItemGroup(placement: .automatic) {
+                                // Custom search implementation
+                                HStack(spacing: 4) {
+                                    Image(systemName: "magnifyingglass")
+                                        .foregroundColor(.gray)
+                                        .font(.system(size: 12))
+                                    
+                                    TextField("Search", text: $appState.globalSearchQuery)
+                                        .textFieldStyle(PlainTextFieldStyle())
+                                        .font(.system(size: 13))
+                                        .frame(width: 200)
+                                        .onSubmit {
+                                            performGlobalSearch()
+                                            
+                                            // Navigate to search results when hitting Enter
+                                            if !appState.globalSearchQuery.isEmpty {
+                                                selectedView = [.searchResults]
+                                            }
+                                        }
+                                        .onChange(of: appState.globalSearchQuery) { _, newValue in
+                                            searchDebounceTask?.cancel()
+                                            searchDebounceTask = Task {
+                                                try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
+                                                if !Task.isCancelled {
+                                                    await performGlobalSearch()
+                                                }
+                                            }
+                                        }
+                                    
+                                    if !appState.globalSearchQuery.isEmpty {
+                                        Button {
+                                            appState.clearSearch()
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundColor(.gray)
+                                                .font(.system(size: 12))
+                                        }
+                                        .buttonStyle(PlainButtonStyle())
+                                    }
+                                }
+                                .padding(6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(Color.gray.opacity(0.2))
+                                )
+                                
+                                // Show search results button when there are results
+                                if !appState.searchResults.isEmpty {
+                                    Button {
+                                        selectedView = [.searchResults]
+                                    } label: {
+                                        Text("\(appState.searchResults.totalCount) results")
+                                            .font(.system(size: 12))
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -270,6 +624,20 @@ struct ContentView: View {
                 }
             } catch {
                 print("Error processing folder: \(error)")
+            }
+        }
+    }
+
+    private func performGlobalSearch() {
+        Task {
+            await libraryViewModel.performGlobalSearch(query: appState.globalSearchQuery)
+            
+            // Once search is complete, check if we have results and show them
+            if !appState.globalSearchQuery.isEmpty && !appState.searchResults.isEmpty {
+                await MainActor.run {
+                    // Only navigate if we have a non-empty search query and results
+                    selectedView = [.searchResults]
+                }
             }
         }
     }
