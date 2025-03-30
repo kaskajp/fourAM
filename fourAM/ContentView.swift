@@ -68,7 +68,7 @@ struct ContentView: View {
                         }
                     }
                     
-                    Section("Playlists") {
+                    Section {
                         NavigationLink(value: SelectionValue.favoriteTracks) {
                             HStack(spacing: 4) {
                                 Image(systemName: "heart.fill")
@@ -109,9 +109,26 @@ struct ContentView: View {
                                 }
                             }
                         }
+                    } header: {
+                        Text("Playlists")
+                            .contentShape(Rectangle())
+                            .contextMenu {
+                                Button {
+                                    showNewPlaylistSheet = true
+                                } label: {
+                                    Label("New Playlist", systemImage: "plus")
+                                }
+                            }
                     }
                 }
                 .scrollPosition(id: $scrollPosition, anchor: .top)
+                .contextMenu {
+                    Button {
+                        showNewPlaylistSheet = true
+                    } label: {
+                        Label("New Playlist", systemImage: "plus")
+                    }
+                }
                 .toolbar {
                     ToolbarItem(placement: .automatic) {
                         Button(action: pickFolder) {
