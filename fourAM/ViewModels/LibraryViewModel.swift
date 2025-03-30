@@ -453,25 +453,34 @@ class LibraryViewModel: ObservableObject {
         if let cachedAlbums = albumsCache["_all"],
            let lastRefresh = lastRefreshTime,
            Date().timeIntervalSince(lastRefresh) < cacheValidityDuration {
+            print("Using cached albums. Count: \(cachedAlbums.count)")
             return cachedAlbums
         }
         
         // Capture necessary values before async work
         let tracksSnapshot = tracks
+        print("Starting album build process with \(tracksSnapshot.count) tracks")
         
         return await withCheckedContinuation { continuation in
             Task { @MainActor in
                 isLoadingAlbums = true
                 
                 let grouped = Dictionary(grouping: tracksSnapshot, by: \.album)
+                print("Grouped \(grouped.count) albums")
                 var albums: [Album] = []
                 
                 for (albumName, albumTracks) in grouped {
+                    // Skip empty albums
+                    if albumName.isEmpty {
+                        print("Skipping album with empty name")
+                        continue
+                    }
+                    
                     let coverArt = albumTracks.first?.artwork
                     let thumbnail = albumTracks.first?.thumbnail
                     albums.append(Album(
                         name: albumName,
-                        albumArtist: albumTracks.first?.albumArtist,
+                        albumArtist: albumTracks.first?.albumArtist ?? "Unknown Artist",
                         artwork: coverArt,
                         thumbnail: thumbnail,
                         tracks: albumTracks,
@@ -481,6 +490,7 @@ class LibraryViewModel: ObservableObject {
                 }
                 
                 let sortedAlbums = albums.sorted { $0.name < $1.name }
+                print("Created \(sortedAlbums.count) album objects")
                 
                 // Update cache
                 albumsCache["_all"] = sortedAlbums

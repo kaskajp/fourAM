@@ -138,6 +138,9 @@ struct ArtworkSettingsView: View {
             // Clear file system cache
             await ThumbnailCache.shared.clearCache()
             
+            // Clear in-memory image cache
+            ImageCache.shared.removeAll()
+            
             // Clear SwiftData thumbnails
             for track in libraryViewModel.tracks {
                 track.thumbnail = nil

@@ -44,9 +44,29 @@ struct AlbumsView: View {
             if libraryViewModel.isLoadingAlbums {
                 ProgressView("Loading albums...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if filteredAlbums.isEmpty {
+                VStack(spacing: 20) {
+                    Image(systemName: "music.note.list")
+                        .font(.system(size: 40))
+                        .foregroundColor(.secondary)
+                    
+                    Text("No albums found")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                    
+                    if !searchQuery.isEmpty {
+                        Text("Try adjusting your search criteria")
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: coverImageSize), spacing: 16)], spacing: 16) {
+                    // Use LazyVGrid with improved performance settings
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: coverImageSize, maximum: coverImageSize + 20), spacing: 16)], 
+                        spacing: 16
+                    ) {
                         ForEach(filteredAlbums, id: \.id) { album in
                             AlbumItemView(
                                 album: album,
@@ -96,15 +116,18 @@ struct AlbumsView: View {
     
     private func loadAlbums() async {
         let albums = await libraryViewModel.allAlbums()
+        
         await MainActor.run {
             if searchQuery.isEmpty {
                 filteredAlbums = albums
+                print("Loaded \(albums.count) albums")
             } else {
                 let lowercaseQuery = searchQuery.lowercased()
                 filteredAlbums = albums.filter { album in
                     album.name.lowercased().contains(lowercaseQuery) ||
                     album.albumArtist.lowercased().contains(lowercaseQuery)
                 }
+                print("Filtered to \(filteredAlbums.count) albums")
             }
         }
     }
@@ -138,14 +161,13 @@ struct AlbumItemView: View {
             onAlbumSelected?(album)
         }) {
             VStack(alignment: .leading) {
-                // Render cover art or placeholder
-                if let data = album.thumbnail, let nsImage = NSImage(data: data) {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: coverImageSize, height: coverImageSize)
-                        .cornerRadius(4)
-                        .clipped()
+                // Use optimized image view instead of creating NSImage in the render path
+                if album.thumbnail != nil {
+                    OptimizedAlbumArtView(
+                        thumbnailData: album.thumbnail,
+                        albumId: album.id.uuidString,
+                        size: coverImageSize
+                    )
                 } else {
                     Rectangle()
                         .fill(Color.gray.opacity(0.5))

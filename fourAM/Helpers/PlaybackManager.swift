@@ -148,12 +148,20 @@ import AppKit
     
     private func startTimer() {
         stopTimer()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        // Increase timer interval from 0.5 to 1.0 seconds to reduce CPU usage
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             if let player = self.audioPlayer {
-                self.currentTime = player.currentTime
+                // Only update if significant change to reduce UI updates
+                let newTime = player.currentTime
+                if abs(newTime - self.currentTime) > 0.5 {
+                    self.currentTime = newTime
+                }
             }
         }
+        
+        // Add timer to common run loop mode to ensure it runs during scrolling
+        RunLoop.current.add(timer!, forMode: .common)
     }
 
     private func stopTimer() {

@@ -56,20 +56,13 @@ struct AlbumDetailView: View {
 
             // Album header (cover + album title)
             HStack(spacing: 8) {
-                if let data = album.thumbnail,
-                   let nsImage = NSImage(data: data) {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 180, height: 180)
-                        .cornerRadius(4)
-                        .clipped()
-                } else {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.5))
-                        .frame(width: 180, height: 180)
-                        .cornerRadius(4)
-                }
+                // Use optimized image view
+                OptimizedAlbumArtView(
+                    thumbnailData: album.thumbnail,
+                    albumId: album.id.uuidString,
+                    size: 180
+                )
+                
                 VStack(alignment: .leading, spacing: 8) {
                     Text(album.name)
                         .font(.title)
