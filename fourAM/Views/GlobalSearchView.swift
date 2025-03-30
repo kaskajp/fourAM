@@ -78,12 +78,17 @@ struct GlobalSearchView: View {
                 .foregroundColor(.gray)
                 .font(.system(size: 12))
             
-            TextField("Search", text: $appState.globalSearchQuery)
+            TextField("Search (min 3 chars)", text: $appState.globalSearchQuery)
                 .textFieldStyle(PlainTextFieldStyle())
                 .focused($isSearchFieldFocused)
                 .font(.system(size: 13))
                 .onSubmit {
-                    performSearch()
+                    // Only perform search if there are at least 3 characters
+                    if appState.globalSearchQuery.count >= 3 {
+                        Task {
+                            await performSearch()
+                        }
+                    }
                 }
                 .onChange(of: appState.globalSearchQuery) { _, newValue in
                     // Show dropdown when typing
@@ -93,13 +98,20 @@ struct GlobalSearchView: View {
                         showDropdown = true
                     }
                     
-                    // Debounce search
+                    // Debounce search and require minimum characters
                     searchTask?.cancel()
-                    searchTask = Task {
-                        try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
-                        if !Task.isCancelled {
-                            await performSearch()
+                    
+                    // Only schedule search task if we have enough characters
+                    if newValue.count >= 3 {
+                        searchTask = Task {
+                            try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
+                            if !Task.isCancelled {
+                                await performSearch()
+                            }
                         }
+                    } else {
+                        // Clear results if text is too short
+                        appState.searchResults = SearchResults()
                     }
                 }
                 .onChange(of: isSearchFieldFocused) { _, isFocused in
@@ -168,17 +180,25 @@ struct GlobalSearchView: View {
         }
     }
     
-    private func performSearch() {
-        print("Starting search for: \(appState.globalSearchQuery)")
-        Task {
-            await libraryViewModel.performGlobalSearch(query: appState.globalSearchQuery)
-            print("Search completed. Results: \(appState.searchResults.totalCount)")
-            
-            // Force UI update by explicitly setting showDropdown
+    private func performSearch() async {
+        // Check minimum character requirement
+        guard appState.globalSearchQuery.count >= 3 else {
+            // Clear search results if query is too short
             await MainActor.run {
-                if !appState.globalSearchQuery.isEmpty && !appState.searchResults.isEmpty {
-                    showDropdown = true
-                }
+                appState.searchResults = SearchResults()
+            }
+            return
+        }
+        
+        print("Starting search for: \(appState.globalSearchQuery)")
+        // Use library view model's search function
+        await libraryViewModel.performGlobalSearch(query: appState.globalSearchQuery)
+        print("Search completed. Results: \(appState.searchResults.totalCount)")
+        
+        // Force UI update by explicitly setting showDropdown
+        await MainActor.run {
+            if !appState.globalSearchQuery.isEmpty && !appState.searchResults.isEmpty {
+                showDropdown = true
             }
         }
     }

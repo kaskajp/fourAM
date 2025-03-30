@@ -164,16 +164,13 @@ struct ContentView: View {
                                             .foregroundColor(.gray)
                                             .font(.system(size: 12))
                                         
-                                        TextField("Search", text: $appState.globalSearchQuery)
+                                        TextField("Search (min 3 chars)", text: $appState.globalSearchQuery)
                                             .textFieldStyle(PlainTextFieldStyle())
                                             .font(.system(size: 13))
                                             .frame(width: 200)
                                             .onSubmit {
-                                                performGlobalSearch()
-                                                
-                                                // Navigate to search results when hitting Enter
-                                                if !appState.globalSearchQuery.isEmpty {
-                                                    selectedView = [.searchResults]
+                                                Task {
+                                                    await performGlobalSearch()
                                                 }
                                             }
                                             .onChange(of: appState.globalSearchQuery) { _, newValue in
@@ -232,16 +229,13 @@ struct ContentView: View {
                                             .foregroundColor(.gray)
                                             .font(.system(size: 12))
                                         
-                                        TextField("Search", text: $appState.globalSearchQuery)
+                                        TextField("Search (min 3 chars)", text: $appState.globalSearchQuery)
                                             .textFieldStyle(PlainTextFieldStyle())
                                             .font(.system(size: 13))
                                             .frame(width: 200)
                                             .onSubmit {
-                                                performGlobalSearch()
-                                                
-                                                // Navigate to search results when hitting Enter
-                                                if !appState.globalSearchQuery.isEmpty {
-                                                    selectedView = [.searchResults]
+                                                Task {
+                                                    await performGlobalSearch()
                                                 }
                                             }
                                             .onChange(of: appState.globalSearchQuery) { _, newValue in
@@ -292,16 +286,13 @@ struct ContentView: View {
                                             .foregroundColor(.gray)
                                             .font(.system(size: 12))
                                         
-                                        TextField("Search", text: $appState.globalSearchQuery)
+                                        TextField("Search (min 3 chars)", text: $appState.globalSearchQuery)
                                             .textFieldStyle(PlainTextFieldStyle())
                                             .font(.system(size: 13))
                                             .frame(width: 200)
                                             .onSubmit {
-                                                performGlobalSearch()
-                                                
-                                                // Navigate to search results when hitting Enter
-                                                if !appState.globalSearchQuery.isEmpty {
-                                                    selectedView = [.searchResults]
+                                                Task {
+                                                    await performGlobalSearch()
                                                 }
                                             }
                                             .onChange(of: appState.globalSearchQuery) { _, newValue in
@@ -352,16 +343,13 @@ struct ContentView: View {
                                             .foregroundColor(.gray)
                                             .font(.system(size: 12))
                                         
-                                        TextField("Search", text: $appState.globalSearchQuery)
+                                        TextField("Search (min 3 chars)", text: $appState.globalSearchQuery)
                                             .textFieldStyle(PlainTextFieldStyle())
                                             .font(.system(size: 13))
                                             .frame(width: 200)
                                             .onSubmit {
-                                                performGlobalSearch()
-                                                
-                                                // Navigate to search results when hitting Enter
-                                                if !appState.globalSearchQuery.isEmpty {
-                                                    selectedView = [.searchResults]
+                                                Task {
+                                                    await performGlobalSearch()
                                                 }
                                             }
                                             .onChange(of: appState.globalSearchQuery) { _, newValue in
@@ -418,16 +406,13 @@ struct ContentView: View {
                                             .foregroundColor(.gray)
                                             .font(.system(size: 12))
                                         
-                                        TextField("Search", text: $appState.globalSearchQuery)
+                                        TextField("Search (min 3 chars)", text: $appState.globalSearchQuery)
                                             .textFieldStyle(PlainTextFieldStyle())
                                             .font(.system(size: 13))
                                             .frame(width: 200)
                                             .onSubmit {
-                                                performGlobalSearch()
-                                                
-                                                // Navigate to search results when hitting Enter
-                                                if !appState.globalSearchQuery.isEmpty {
-                                                    selectedView = [.searchResults]
+                                                Task {
+                                                    await performGlobalSearch()
                                                 }
                                             }
                                             .onChange(of: appState.globalSearchQuery) { _, newValue in
@@ -479,16 +464,13 @@ struct ContentView: View {
                                         .foregroundColor(.gray)
                                         .font(.system(size: 12))
                                     
-                                    TextField("Search", text: $appState.globalSearchQuery)
+                                    TextField("Search (min 3 chars)", text: $appState.globalSearchQuery)
                                         .textFieldStyle(PlainTextFieldStyle())
                                         .font(.system(size: 13))
                                         .frame(width: 200)
                                         .onSubmit {
-                                            performGlobalSearch()
-                                            
-                                            // Navigate to search results when hitting Enter
-                                            if !appState.globalSearchQuery.isEmpty {
-                                                selectedView = [.searchResults]
+                                            Task {
+                                                await performGlobalSearch()
                                             }
                                         }
                                         .onChange(of: appState.globalSearchQuery) { _, newValue in
@@ -628,16 +610,24 @@ struct ContentView: View {
         }
     }
 
-    private func performGlobalSearch() {
-        Task {
-            await libraryViewModel.performGlobalSearch(query: appState.globalSearchQuery)
-            
-            // Once search is complete, check if we have results and show them
-            if !appState.globalSearchQuery.isEmpty && !appState.searchResults.isEmpty {
-                await MainActor.run {
-                    // Only navigate if we have a non-empty search query and results
-                    selectedView = [.searchResults]
-                }
+    private func performGlobalSearch() async {
+        // Only perform search if query has at least 3 characters
+        guard appState.globalSearchQuery.count >= 3 else {
+            // Clear search results if query is too short
+            await MainActor.run {
+                appState.searchResults = SearchResults()
+            }
+            return
+        }
+        
+        // Use library view model's search function
+        await libraryViewModel.performGlobalSearch(query: appState.globalSearchQuery)
+        
+        // Once search is complete, check if we have results and show them
+        if !appState.globalSearchQuery.isEmpty && !appState.searchResults.isEmpty {
+            await MainActor.run {
+                // Only navigate if we have a non-empty search query and results
+                selectedView = [.searchResults]
             }
         }
     }
