@@ -5,6 +5,7 @@ import SwiftData
 struct AlbumDetailView: View {
     let album: Album
     let onBack: () -> Void // Closure to handle the back button action
+    let sourceView: SelectionValue // Track where the album was opened from
 
     @Environment(\.modelContext) var modelContext
     @ObservedObject var libraryViewModel: LibraryViewModel
@@ -16,6 +17,7 @@ struct AlbumDetailView: View {
     @State private var playTask: Task<Void, Never>?
     @State private var showNewPlaylistSheet = false
     @State private var trackToAddToNewPlaylist: Track? = nil
+    @State private var scrollPosition: String? = nil // Track scroll position
     
     var body: some View {
         // Group and sort tracks
@@ -28,7 +30,10 @@ struct AlbumDetailView: View {
         return VStack(alignment: .leading) {
             // Top bar
             HStack(alignment: .center) {
-                Button(action: onBack) { // Call the provided back action
+                Button(action: {
+                    // Navigate back to the source view
+                    onBack()
+                }) {
                     Image(systemName: "chevron.left")
                         .font(.title2)
                         .foregroundColor(.primary)
@@ -113,6 +118,7 @@ struct AlbumDetailView: View {
                             }
                             .background(Color.clear) // Ensure no background
                             .padding(.horizontal, 8) // Match content padding
+                            .id("disc\(disc)") // Add ID for scroll position
 
                             // Tracks for the current disc
                             trackList(for: disc, tracks: filteredGroupedTracks[disc]!)
@@ -124,6 +130,7 @@ struct AlbumDetailView: View {
                     .padding(0)
                 }
             }
+            .scrollPosition(id: $scrollPosition, anchor: .top)
             .scrollContentBackground(.hidden)
             .background(Color.clear)
             .listStyle(.plain) // Removes additional styling applied by default
@@ -135,10 +142,18 @@ struct AlbumDetailView: View {
         .navigationTitle(album.name)
         .onAppear {
             keyMonitorManager.startMonitoring { isSearchFieldFocused }
+            // Restore scroll position if available
+            if let lastPosition = UserDefaults.standard.string(forKey: "lastScrollPosition_\(album.id)") {
+                scrollPosition = lastPosition
+            }
         }
         .onDisappear {
             keyMonitorManager.stopMonitoring()
             playTask?.cancel()
+            // Save scroll position
+            if let position = scrollPosition {
+                UserDefaults.standard.set(position, forKey: "lastScrollPosition_\(album.id)")
+            }
         }
     }
     

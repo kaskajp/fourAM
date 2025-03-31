@@ -2,6 +2,13 @@ import SwiftUI
 import SwiftData
 import AppKit
 
+struct ScrollPositionPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct AlbumsView: View {
     @ObservedObject var libraryViewModel: LibraryViewModel
     @ObservedObject private var keyMonitorManager = KeyMonitorManager.shared
@@ -11,10 +18,14 @@ struct AlbumsView: View {
     @AppStorage("coverImageSize") private var coverImageSize: Double = 120.0
     @State private var albums: [Album] = [] // All albums
     @State private var loadAlbumsTask: Task<Void, Never>?
+    @State private var scrollOffset: CGFloat = 0
+    @State private var isRestoringScrollPosition = true
+    @State private var hasInitialLoad = false
+    @State private var isViewReady = false
     
     var body: some View {
         VStack {
-            if libraryViewModel.isLoadingAlbums {
+            if libraryViewModel.isLoadingAlbums || isRestoringScrollPosition {
                 ProgressView("Loading albums...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if albums.isEmpty {
@@ -30,7 +41,14 @@ struct AlbumsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    // Use LazyVGrid with improved performance settings
+                    GeometryReader { geometry in
+                        Color.clear.preference(
+                            key: ScrollPositionPreferenceKey.self,
+                            value: geometry.frame(in: .global).minY
+                        )
+                    }
+                    .frame(height: 0)
+                    
                     LazyVGrid(
                         columns: [GridItem(.adaptive(minimum: coverImageSize, maximum: coverImageSize + 20), spacing: 16)], 
                         spacing: 16
@@ -42,7 +60,7 @@ struct AlbumsView: View {
                                 onAlbumSelected: onAlbumSelected,
                                 onDelete: {
                                     Task {
-                                        await loadAlbums() // Refresh the albums
+                                        await loadAlbums()
                                     }
                                 },
                                 modelContext: modelContext,
@@ -52,12 +70,40 @@ struct AlbumsView: View {
                     }
                     .padding()
                 }
+                .opacity(isViewReady ? 1 : 0)
+                .onPreferenceChange(ScrollPositionPreferenceKey.self) { value in
+                    if let scrollView = NSScrollView.current {
+                        let currentOffset = scrollView.contentView.bounds.origin.y
+                        scrollOffset = currentOffset
+                    }
+                }
+                .onAppear {
+                    Task { @MainActor in
+                        // Wait for content to be ready
+                        try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+                        
+                        if let savedOffset = UserDefaults.standard.object(forKey: "lastScrollOffset") as? CGFloat {
+                            if let scrollView = NSScrollView.current {
+                                scrollView.contentView.scroll(to: NSPoint(x: 0, y: savedOffset))
+                                // Wait a frame to ensure the scroll position is set
+                                try? await Task.sleep(nanoseconds: 16_666_666) // 1/60th of a second
+                                isViewReady = true
+                            }
+                        } else {
+                            isViewReady = true
+                        }
+                        
+                        isRestoringScrollPosition = false
+                    }
+                }
             }
         }
         .onAppear {
-            keyMonitorManager.startMonitoring { false }
-            loadAlbumsTask = Task {
-                await loadAlbums()
+            if !hasInitialLoad {
+                hasInitialLoad = true
+                loadAlbumsTask = Task {
+                    await loadAlbums()
+                }
             }
             onSetRefreshAction?({
                 Task {
@@ -66,17 +112,21 @@ struct AlbumsView: View {
             })
         }
         .onDisappear {
-            keyMonitorManager.stopMonitoring()
             loadAlbumsTask?.cancel()
+            if let scrollView = NSScrollView.current {
+                let currentOffset = scrollView.contentView.bounds.origin.y
+                UserDefaults.standard.set(currentOffset, forKey: "lastScrollOffset")
+            }
+            isViewReady = false
         }
         .onChange(of: libraryViewModel.tracks) { oldValue, newValue in
-            loadAlbumsTask?.cancel()
-            loadAlbumsTask = Task {
-                await loadAlbums()
+            // Only reload if the tracks actually changed and we've done initial load
+            if oldValue != newValue && hasInitialLoad {
+                loadAlbumsTask?.cancel()
+                loadAlbumsTask = Task {
+                    await loadAlbums()
+                }
             }
-        }
-        .task {
-            await loadAlbums()
         }
         .navigationTitle("Albums")
     }
@@ -86,7 +136,7 @@ struct AlbumsView: View {
         
         await MainActor.run {
             albums = allAlbums
-            print("Loaded \(albums.count) albums")
+            isRestoringScrollPosition = false
         }
     }
 }
@@ -344,6 +394,31 @@ struct AlbumItemView: View {
                 }
             }
         }
+    }
+}
+
+extension NSScrollView {
+    static var current: NSScrollView? {
+        if let window = NSApp.keyWindow,
+           let contentView = window.contentView {
+            // Try to find the scroll view in the view hierarchy
+            func findScrollView(in view: NSView) -> NSScrollView? {
+                if let scrollView = view as? NSScrollView {
+                    // Only return the scroll view if it's wide enough to be the main content
+                    if scrollView.frame.width > 300 {
+                        return scrollView
+                    }
+                }
+                for subview in view.subviews {
+                    if let found = findScrollView(in: subview) {
+                        return found
+                    }
+                }
+                return nil
+            }
+            return findScrollView(in: contentView)
+        }
+        return nil
     }
 }
 

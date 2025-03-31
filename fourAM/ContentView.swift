@@ -25,595 +25,301 @@ struct ContentView: View {
     @Query private var playlists: [Playlist]
     @StateObject private var libraryViewModel = LibraryViewModel.shared
     @State private var searchDebounceTask: Task<Void, Never>?
+    @State private var albumsViewScrollPosition: String? = nil
     @ObservedObject var playbackManager = PlaybackManager.shared
-    
+    @State private var sourceView: SelectionValue? = nil
+
     // Group audio files by artist
     private var artistsDictionary: [String: [Track]] {
-        Dictionary(grouping: libraryViewModel.tracks, by: \.artist)
+        let tracks = libraryViewModel.tracks
+        var dictionary: [String: [Track]] = [:]
+        for track in tracks {
+            dictionary[track.artist, default: []].append(track)
+        }
+        return dictionary
     }
 
     // Create a sorted list of artist names
     private var artistNames: [String] {
-        artistsDictionary.keys.sorted()
+        let names = Array(artistsDictionary.keys)
+        return names.sorted()
     }
 
-    var body: some View {
-        VStack(spacing: 0) { // Ensures no gap between the navigation view and the playback controls
-            NavigationSplitView {
-                List(selection: $selectedView) {
-                    // Processing Section
-                    if libraryViewModel.isScanning {
-                        Section("Processing") {
-                            VStack(alignment: .leading) {
-                                Text(libraryViewModel.currentPhase)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+    // MARK: - View Components
+    
+    private var sidebarContent: some View {
+        List(selection: $selectedView) {
+            // Processing Section
+            if libraryViewModel.isScanning {
+                Section("Processing") {
+                    VStack(alignment: .leading) {
+                        Text(libraryViewModel.currentPhase)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
 
-                                ProgressView(value: libraryViewModel.progress, total: 1.0)
-                            }
-                            .padding(.vertical, 4)
-                        }
-                        .id("processingSection")
-                        .onAppear {
-                            scrollPosition = "processingSection"
-                        }
+                        ProgressView(value: libraryViewModel.progress, total: 1.0)
                     }
-                    
-                    Section("Library") {
-                        NavigationLink(value: SelectionValue.albums) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "square.stack")
-                                    .foregroundColor(.indigo)
-                                Text("Albums")
-                            }
-                        }
-                        
-                        NavigationLink(value: SelectionValue.recentlyAdded) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "clock")
-                                    .foregroundColor(.indigo)
-                                Text("Recently Added")
-                            }
-                        }
-                    }
-                    
-                    Section {
-                        NavigationLink(value: SelectionValue.favoriteTracks) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "heart.fill")
-                                    .foregroundColor(.indigo)
-                                Text("Favorite Tracks")
-                            }
-                        }
-                        
-                        ForEach(playlists) { playlist in
-                            NavigationLink(value: SelectionValue.playlist(playlist)) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "music.note.list")
-                                        .foregroundColor(.indigo)
-                                    Text(playlist.name)
-                                }
-                            }
-                            .contextMenu {
-                                Button {
-                                    playlistToRename = playlist
-                                    showRenamePlaylistSheet = true
-                                } label: {
-                                    Label("Rename Playlist", systemImage: "pencil")
-                                }
-
-                                Button(role: .destructive) {
-                                    // If this playlist is currently selected, switch to AlbumsView
-                                    if selectedView.contains(.playlist(playlist)) {
-                                        selectedView = [.albums]
-                                    }
-                                    
-                                    // Remove all tracks from the playlist first
-                                    playlist.tracks.removeAll()
-                                    // Delete the playlist
-                                    modelContext.delete(playlist)
-                                    try? modelContext.save()
-                                } label: {
-                                    Label("Delete Playlist", systemImage: "trash")
-                                }
-                            }
-                        }
-                    } header: {
-                        Text("Playlists")
-                            .contentShape(Rectangle())
-                            .contextMenu {
-                                Button {
-                                    showNewPlaylistSheet = true
-                                } label: {
-                                    Label("New Playlist", systemImage: "plus")
-                                }
-                            }
+                    .padding(.vertical, 4)
+                }
+                .id("processingSection")
+                .onAppear {
+                    scrollPosition = "processingSection"
+                }
+            }
+            
+            Section("Library") {
+                NavigationLink(value: SelectionValue.albums) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "square.stack")
+                            .foregroundColor(.indigo)
+                        Text("Albums")
                     }
                 }
-                .scrollPosition(id: $scrollPosition, anchor: .top)
-                .contextMenu {
-                    Button {
-                        showNewPlaylistSheet = true
-                    } label: {
-                        Label("New Playlist", systemImage: "plus")
+                
+                NavigationLink(value: SelectionValue.recentlyAdded) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .foregroundColor(.indigo)
+                        Text("Recently Added")
                     }
                 }
-                .toolbar {
-                    ToolbarItem(placement: .automatic) {
-                        Button(action: pickFolder) {
-                            Label("Add Folder", systemImage: "folder.badge.plus")
+            }
+            
+            Section {
+                NavigationLink(value: SelectionValue.favoriteTracks) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "heart.fill")
+                            .foregroundColor(.indigo)
+                        Text("Favorite Tracks")
+                    }
+                }
+                
+                ForEach(playlists) { playlist in
+                    NavigationLink(value: SelectionValue.playlist(playlist)) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "music.note.list")
+                                .foregroundColor(.indigo)
+                            Text(playlist.name)
                         }
                     }
-                    
-                    ToolbarItem(placement: .automatic) {
+                    .contextMenu {
+                        Button {
+                            playlistToRename = playlist
+                            showRenamePlaylistSheet = true
+                        } label: {
+                            Label("Rename Playlist", systemImage: "pencil")
+                        }
+
+                        Button(role: .destructive) {
+                            if selectedView.contains(.playlist(playlist)) {
+                                selectedView = [.albums]
+                            }
+                            playlist.tracks.removeAll()
+                            modelContext.delete(playlist)
+                            try? modelContext.save()
+                        } label: {
+                            Label("Delete Playlist", systemImage: "trash")
+                        }
+                    }
+                }
+            } header: {
+                Text("Playlists")
+                    .contentShape(Rectangle())
+                    .contextMenu {
                         Button {
                             showNewPlaylistSheet = true
                         } label: {
                             Label("New Playlist", systemImage: "plus")
                         }
                     }
-                }
-                .sheet(isPresented: $showNewPlaylistSheet) {
-                    NewPlaylistSheet(track: nil)
-                }
-                .sheet(isPresented: $showRenamePlaylistSheet) {
-                    if let playlist = playlistToRename {
-                        RenamePlaylistSheet(playlist: playlist)
-                    }
-                }
-                .onChange(of: showRenamePlaylistSheet) { _, isPresented in
-                    if !isPresented {
-                        playlistToRename = nil
-                    }
-                }
-                .frame(minWidth: 180)
-            } detail: {
-                Group {
-                    if let selection = selectedView.first {
-                        switch selection {
-                        case .albums:
-                            AlbumsView(
-                                libraryViewModel: libraryViewModel,
-                                onAlbumSelected: { album in
-                                    selectedAlbum = album
-                                    selectedView = [.albumDetail(album)]
-                                },
-                                onSetRefreshAction: { action in
-                                    refreshAction = action
-                                }
-                            )
-                            .toolbar {
-                                ToolbarItemGroup(placement: .automatic) {
-                                    // Custom search implementation
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "magnifyingglass")
-                                            .foregroundColor(.gray)
-                                            .font(.system(size: 12))
-                                        
-                                        TextField("Search", text: $appState.globalSearchQuery)
-                                            .textFieldStyle(PlainTextFieldStyle())
-                                            .font(.system(size: 13))
-                                            .frame(width: 200)
-                                            .onSubmit {
-                                                Task {
-                                                    await performGlobalSearch()
-                                                }
-                                            }
-                                            .onChange(of: appState.globalSearchQuery) { _, newValue in
-                                                searchDebounceTask?.cancel()
-                                                searchDebounceTask = Task {
-                                                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
-                                                    if !Task.isCancelled {
-                                                        await performGlobalSearch()
-                                                    }
-                                                }
-                                            }
-                                        
-                                        if !appState.globalSearchQuery.isEmpty {
-                                            Button {
-                                                appState.clearSearch()
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .foregroundColor(.gray)
-                                                    .font(.system(size: 12))
-                                            }
-                                            .buttonStyle(PlainButtonStyle())
-                                        }
-                                    }
-                                    .padding(6)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.gray.opacity(0.2))
-                                    )
-                                    
-                                    // Show search results button when there are results
-                                    if !appState.searchResults.isEmpty {
-                                        Button {
-                                            selectedView = [.searchResults]
-                                        } label: {
-                                            Text("\(appState.searchResults.totalCount) results")
-                                                .font(.system(size: 12))
-                                        }
-                                    }
-                                }
-                            }
-                        case .albumDetail(let album):
-                            AlbumDetailView(
-                                album: album,
-                                onBack: {
-                                    selectedView = [.albums]
-                                },
-                                modelContext: .init(\.modelContext),
-                                libraryViewModel: libraryViewModel,
-                                dismiss: .init(\.dismiss)
-                            )
-                            .toolbar {
-                                ToolbarItemGroup(placement: .automatic) {
-                                    // Custom search implementation
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "magnifyingglass")
-                                            .foregroundColor(.gray)
-                                            .font(.system(size: 12))
-                                        
-                                        TextField("Search", text: $appState.globalSearchQuery)
-                                            .textFieldStyle(PlainTextFieldStyle())
-                                            .font(.system(size: 13))
-                                            .frame(width: 200)
-                                            .onSubmit {
-                                                Task {
-                                                    await performGlobalSearch()
-                                                }
-                                            }
-                                            .onChange(of: appState.globalSearchQuery) { _, newValue in
-                                                searchDebounceTask?.cancel()
-                                                searchDebounceTask = Task {
-                                                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
-                                                    if !Task.isCancelled {
-                                                        await performGlobalSearch()
-                                                    }
-                                                }
-                                            }
-                                        
-                                        if !appState.globalSearchQuery.isEmpty {
-                                            Button {
-                                                appState.clearSearch()
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .foregroundColor(.gray)
-                                                    .font(.system(size: 12))
-                                            }
-                                            .buttonStyle(PlainButtonStyle())
-                                        }
-                                    }
-                                    .padding(6)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.gray.opacity(0.2))
-                                    )
-                                    
-                                    // Show search results button when there are results
-                                    if !appState.searchResults.isEmpty {
-                                        Button {
-                                            selectedView = [.searchResults]
-                                        } label: {
-                                            Text("\(appState.searchResults.totalCount) results")
-                                                .font(.system(size: 12))
-                                        }
-                                    }
-                                }
-                            }
-                        case .favoriteTracks:
-                            FavoriteTracksView(libraryViewModel: libraryViewModel)
-                            .toolbar {
-                                ToolbarItemGroup(placement: .automatic) {
-                                    // Custom search implementation
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "magnifyingglass")
-                                            .foregroundColor(.gray)
-                                            .font(.system(size: 12))
-                                        
-                                        TextField("Search", text: $appState.globalSearchQuery)
-                                            .textFieldStyle(PlainTextFieldStyle())
-                                            .font(.system(size: 13))
-                                            .frame(width: 200)
-                                            .onSubmit {
-                                                Task {
-                                                    await performGlobalSearch()
-                                                }
-                                            }
-                                            .onChange(of: appState.globalSearchQuery) { _, newValue in
-                                                searchDebounceTask?.cancel()
-                                                searchDebounceTask = Task {
-                                                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
-                                                    if !Task.isCancelled {
-                                                        await performGlobalSearch()
-                                                    }
-                                                }
-                                            }
-                                        
-                                        if !appState.globalSearchQuery.isEmpty {
-                                            Button {
-                                                appState.clearSearch()
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .foregroundColor(.gray)
-                                                    .font(.system(size: 12))
-                                            }
-                                            .buttonStyle(PlainButtonStyle())
-                                        }
-                                    }
-                                    .padding(6)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.gray.opacity(0.2))
-                                    )
-                                    
-                                    // Show search results button when there are results
-                                    if !appState.searchResults.isEmpty {
-                                        Button {
-                                            selectedView = [.searchResults]
-                                        } label: {
-                                            Text("\(appState.searchResults.totalCount) results")
-                                                .font(.system(size: 12))
-                                        }
-                                    }
-                                }
-                            }
-                        case .playlist(let playlist):
-                            PlaylistDetailView(playlist: playlist)
-                            .toolbar {
-                                ToolbarItemGroup(placement: .automatic) {
-                                    // Custom search implementation
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "magnifyingglass")
-                                            .foregroundColor(.gray)
-                                            .font(.system(size: 12))
-                                        
-                                        TextField("Search", text: $appState.globalSearchQuery)
-                                            .textFieldStyle(PlainTextFieldStyle())
-                                            .font(.system(size: 13))
-                                            .frame(width: 200)
-                                            .onSubmit {
-                                                Task {
-                                                    await performGlobalSearch()
-                                                }
-                                            }
-                                            .onChange(of: appState.globalSearchQuery) { _, newValue in
-                                                searchDebounceTask?.cancel()
-                                                searchDebounceTask = Task {
-                                                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
-                                                    if !Task.isCancelled {
-                                                        await performGlobalSearch()
-                                                    }
-                                                }
-                                            }
-                                        
-                                        if !appState.globalSearchQuery.isEmpty {
-                                            Button {
-                                                appState.clearSearch()
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .foregroundColor(.gray)
-                                                    .font(.system(size: 12))
-                                            }
-                                            .buttonStyle(PlainButtonStyle())
-                                        }
-                                    }
-                                    .padding(6)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.gray.opacity(0.2))
-                                    )
-                                    
-                                    // Show search results button when there are results
-                                    if !appState.searchResults.isEmpty {
-                                        Button {
-                                            selectedView = [.searchResults]
-                                        } label: {
-                                            Text("\(appState.searchResults.totalCount) results")
-                                                .font(.system(size: 12))
-                                        }
-                                    }
-                                }
-                            }
-                        case .searchResults:
-                            // Show the new SearchResultsView
-                            SearchResultsView(
-                                onAlbumSelected: { album in
-                                    selectedAlbum = album
-                                    selectedView = [.albumDetail(album)]
-                                }
-                            )
-                            .toolbar {
-                                ToolbarItemGroup(placement: .automatic) {
-                                    // Custom search implementation
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "magnifyingglass")
-                                            .foregroundColor(.gray)
-                                            .font(.system(size: 12))
-                                        
-                                        TextField("Search", text: $appState.globalSearchQuery)
-                                            .textFieldStyle(PlainTextFieldStyle())
-                                            .font(.system(size: 13))
-                                            .frame(width: 200)
-                                            .onSubmit {
-                                                Task {
-                                                    await performGlobalSearch()
-                                                }
-                                            }
-                                            .onChange(of: appState.globalSearchQuery) { _, newValue in
-                                                searchDebounceTask?.cancel()
-                                                searchDebounceTask = Task {
-                                                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
-                                                    if !Task.isCancelled {
-                                                        await performGlobalSearch()
-                                                    }
-                                                }
-                                            }
-                                        
-                                        if !appState.globalSearchQuery.isEmpty {
-                                            Button {
-                                                appState.clearSearch()
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .foregroundColor(.gray)
-                                                    .font(.system(size: 12))
-                                            }
-                                            .buttonStyle(PlainButtonStyle())
-                                        }
-                                    }
-                                    .padding(6)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.gray.opacity(0.2))
-                                    )
-                                    
-                                    // Show results count on search results page
-                                    if !appState.searchResults.isEmpty {
-                                        Text("\(appState.searchResults.totalCount) results")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-                        case .recentlyAdded:
-                            RecentlyAddedView(
-                                libraryViewModel: libraryViewModel,
-                                onAlbumSelected: { album in
-                                    selectedAlbum = album
-                                    selectedView = [.albumDetail(album)]
-                                }
-                            )
-                            .toolbar {
-                                ToolbarItemGroup(placement: .automatic) {
-                                    // Custom search implementation
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "magnifyingglass")
-                                            .foregroundColor(.gray)
-                                            .font(.system(size: 12))
-                                        
-                                        TextField("Search", text: $appState.globalSearchQuery)
-                                            .textFieldStyle(PlainTextFieldStyle())
-                                            .font(.system(size: 13))
-                                            .frame(width: 200)
-                                            .onSubmit {
-                                                Task {
-                                                    await performGlobalSearch()
-                                                }
-                                            }
-                                            .onChange(of: appState.globalSearchQuery) { _, newValue in
-                                                searchDebounceTask?.cancel()
-                                                searchDebounceTask = Task {
-                                                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
-                                                    if !Task.isCancelled {
-                                                        await performGlobalSearch()
-                                                    }
-                                                }
-                                            }
-                                        
-                                        if !appState.globalSearchQuery.isEmpty {
-                                            Button {
-                                                appState.clearSearch()
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .foregroundColor(.gray)
-                                                    .font(.system(size: 12))
-                                            }
-                                            .buttonStyle(PlainButtonStyle())
-                                        }
-                                    }
-                                    .padding(6)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(Color.gray.opacity(0.2))
-                                    )
-                                    
-                                    // Show search results button when there are results
-                                    if !appState.searchResults.isEmpty {
-                                        Button {
-                                            selectedView = [.searchResults]
-                                        } label: {
-                                            Text("\(appState.searchResults.totalCount) results")
-                                                .font(.system(size: 12))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        AlbumsView(libraryViewModel: libraryViewModel, onAlbumSelected: { album in
+            }
+        }
+        .scrollPosition(id: $scrollPosition, anchor: .top)
+        .contextMenu {
+            Button {
+                showNewPlaylistSheet = true
+            } label: {
+                Label("New Playlist", systemImage: "plus")
+            }
+        }
+    }
+    
+    private var detailContent: some View {
+        ZStack {
+            if let selection = selectedView.first {
+                switch selection {
+                case .albums:
+                    AlbumsView(
+                        libraryViewModel: libraryViewModel,
+                        onAlbumSelected: { album in
                             selectedAlbum = album
                             selectedView = [.albumDetail(album)]
-                        })
-                        .toolbar {
-                            ToolbarItemGroup(placement: .automatic) {
-                                // Custom search implementation
-                                HStack(spacing: 4) {
-                                    Image(systemName: "magnifyingglass")
-                                        .foregroundColor(.gray)
-                                        .font(.system(size: 12))
-                                    
-                                    TextField("Search", text: $appState.globalSearchQuery)
-                                        .textFieldStyle(PlainTextFieldStyle())
-                                        .font(.system(size: 13))
-                                        .frame(width: 200)
-                                        .onSubmit {
-                                            Task {
-                                                await performGlobalSearch()
-                                            }
-                                        }
-                                        .onChange(of: appState.globalSearchQuery) { _, newValue in
-                                            searchDebounceTask?.cancel()
-                                            searchDebounceTask = Task {
-                                                try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
-                                                if !Task.isCancelled {
-                                                    await performGlobalSearch()
-                                                }
-                                            }
-                                        }
-                                    
-                                    if !appState.globalSearchQuery.isEmpty {
-                                        Button {
-                                            appState.clearSearch()
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundColor(.gray)
-                                                .font(.system(size: 12))
-                                        }
-                                        .buttonStyle(PlainButtonStyle())
-                                    }
+                            sourceView = .albums
+                        },
+                        onSetRefreshAction: { action in
+                            refreshAction = action
+                        }
+                    )
+                    .onAppear {
+                        if let position = albumsViewScrollPosition {
+                            scrollPosition = position
+                        }
+                    }
+                    .onDisappear {
+                        albumsViewScrollPosition = scrollPosition
+                    }
+                case .albumDetail(let album):
+                    AlbumDetailView(
+                        album: album,
+                        onBack: {
+                            if let source = sourceView {
+                                selectedView = [source]
+                                if source == .albums {
+                                    scrollPosition = albumsViewScrollPosition
                                 }
-                                .padding(6)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(Color.gray.opacity(0.2))
-                                )
-                                
-                                // Show search results button when there are results
-                                if !appState.searchResults.isEmpty {
-                                    Button {
-                                        selectedView = [.searchResults]
-                                    } label: {
-                                        Text("\(appState.searchResults.totalCount) results")
-                                            .font(.system(size: 12))
-                                    }
-                                }
+                            } else {
+                                selectedView = [.albums]
+                                scrollPosition = albumsViewScrollPosition
+                            }
+                        },
+                        sourceView: sourceView ?? .albums,
+                        modelContext: .init(\.modelContext),
+                        libraryViewModel: libraryViewModel,
+                        dismiss: .init(\.dismiss)
+                    )
+                case .favoriteTracks:
+                    FavoriteTracksView(libraryViewModel: libraryViewModel)
+                case .playlist(let playlist):
+                    PlaylistDetailView(playlist: playlist)
+                case .searchResults:
+                    SearchResultsView(
+                        onAlbumSelected: { album in
+                            selectedAlbum = album
+                            selectedView = [.albumDetail(album)]
+                            sourceView = .searchResults
+                        }
+                    )
+                case .recentlyAdded:
+                    RecentlyAddedView(
+                        libraryViewModel: libraryViewModel,
+                        onAlbumSelected: { album in
+                            selectedAlbum = album
+                            selectedView = [.albumDetail(album)]
+                            sourceView = .recentlyAdded
+                        }
+                    )
+                }
+            } else {
+                AlbumsView(libraryViewModel: libraryViewModel, onAlbumSelected: { album in
+                    selectedAlbum = album
+                    selectedView = [.albumDetail(album)]
+                })
+            }
+        }
+    }
+    
+    private var searchToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .automatic) {
+            HStack(spacing: 4) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.gray)
+                    .font(.system(size: 12))
+                
+                TextField("Search", text: $appState.globalSearchQuery)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .font(.system(size: 13))
+                    .frame(width: 200)
+                    .onSubmit {
+                        Task {
+                            await performGlobalSearch()
+                        }
+                    }
+                    .onChange(of: appState.globalSearchQuery) { _, newValue in
+                        searchDebounceTask?.cancel()
+                        searchDebounceTask = Task {
+                            try? await Task.sleep(nanoseconds: 300_000_000)
+                            if !Task.isCancelled {
+                                await performGlobalSearch()
                             }
                         }
                     }
+                
+                if !appState.globalSearchQuery.isEmpty {
+                    Button {
+                        appState.clearSearch()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.gray)
+                            .font(.system(size: 12))
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
-
-            // Playback controls spanning across the bottom of the window
+            .padding(6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.gray.opacity(0.2))
+            )
+            
+            if !appState.searchResults.isEmpty {
+                Button {
+                    selectedView = [.searchResults]
+                } label: {
+                    Text("\(appState.searchResults.totalCount) results")
+                        .font(.system(size: 12))
+                }
+            }
+        }
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            NavigationSplitView {
+                sidebarContent
+                    .frame(minWidth: 180)
+                    .toolbar {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button(action: pickFolder) {
+                                Label("Add Folder", systemImage: "folder.badge.plus")
+                            }
+                        }
+                        
+                        ToolbarItem(placement: .primaryAction) {
+                            Button {
+                                showNewPlaylistSheet = true
+                            } label: {
+                                Label("New Playlist", systemImage: "plus")
+                            }
+                        }
+                    }
+            } detail: {
+                detailContent
+                    .toolbar {
+                        searchToolbar
+                    }
+            }
+            
             PlaybackControlsView()
-                .frame(maxWidth: .infinity) // Ensures it spans the full width of the window
+                .frame(maxWidth: .infinity)
+        }
+        .sheet(isPresented: $showNewPlaylistSheet) {
+            NewPlaylistSheet(track: nil)
+        }
+        .sheet(isPresented: $showRenamePlaylistSheet) {
+            if let playlist = playlistToRename {
+                RenamePlaylistSheet(playlist: playlist)
+            }
+        }
+        .onChange(of: showRenamePlaylistSheet) { _, isPresented in
+            if !isPresented {
+                playlistToRename = nil
+            }
         }
         .onAppear {
             PlaybackManager.shared.setModelContext(modelContext)
             libraryViewModel.tracks = LibraryHelper.fetchTracks(from: modelContext)
             print("Library loaded on appear with \(libraryViewModel.tracks.count) tracks")
             
-            // Setup notification observers for menu commands
             NotificationCenter.default.addObserver(forName: Notification.Name("MenuAddFolder"), object: nil, queue: .main) { _ in
                 pickFolder()
             }
@@ -623,7 +329,6 @@ struct ContentView: View {
             }
         }
         .onDisappear {
-            // Remove notification observers
             NotificationCenter.default.removeObserver(self, name: Notification.Name("MenuAddFolder"), object: nil)
             NotificationCenter.default.removeObserver(self, name: Notification.Name("MenuNewPlaylist"), object: nil)
         }
