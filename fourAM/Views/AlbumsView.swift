@@ -9,23 +9,63 @@ struct ScrollPositionPreferenceKey: PreferenceKey {
     }
 }
 
-struct AlbumsView: View {
+struct AlbumsContainerView: View {
     @ObservedObject var libraryViewModel: LibraryViewModel
     @ObservedObject private var keyMonitorManager = KeyMonitorManager.shared
     var onAlbumSelected: ((Album) -> Void)? = nil
     var onSetRefreshAction: ((@escaping () -> Void) -> Void)?
     @Environment(\.modelContext) private var modelContext
+    @State private var isVisible = false
+    
+    var body: some View {
+        ZStack {
+            // Keep AlbumsView alive in the background
+            AlbumsView(
+                libraryViewModel: libraryViewModel,
+                onAlbumSelected: onAlbumSelected,
+                onSetRefreshAction: onSetRefreshAction,
+                isContainerVisible: isVisible
+            )
+            .opacity(isVisible ? 1 : 0)
+            .allowsHitTesting(isVisible)
+            
+            // Show/hide based on visibility
+            if !isVisible {
+                Color.clear
+                    .contentShape(Rectangle())
+            }
+        }
+        .onAppear {
+            // Use a short delay to allow animation to look smoother
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                isVisible = true
+            }
+        }
+        .onDisappear {
+            isVisible = false
+        }
+    }
+}
+
+struct AlbumsView: View {
+    @ObservedObject var libraryViewModel: LibraryViewModel
+    @ObservedObject private var keyMonitorManager = KeyMonitorManager.shared
+    var onAlbumSelected: ((Album) -> Void)? = nil
+    var onSetRefreshAction: ((@escaping () -> Void) -> Void)?
+    var isContainerVisible: Bool = true
+    @Environment(\.modelContext) private var modelContext
     @AppStorage("coverImageSize") private var coverImageSize: Double = 120.0
     @State private var albums: [Album] = [] // All albums
     @State private var loadAlbumsTask: Task<Void, Never>?
     @State private var scrollOffset: CGFloat = 0
-    @State private var isRestoringScrollPosition = true
+    @State private var isRestoringScrollPosition = false
     @State private var hasInitialLoad = false
     @State private var isViewReady = false
+    @State private var isSettingScrollPosition = false
     
     var body: some View {
         VStack {
-            if libraryViewModel.isLoadingAlbums || isRestoringScrollPosition {
+            if libraryViewModel.isLoadingAlbums || (isRestoringScrollPosition && albums.isEmpty) {
                 ProgressView("Loading albums...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if albums.isEmpty {
@@ -70,37 +110,35 @@ struct AlbumsView: View {
                     }
                     .padding()
                 }
-                .opacity(isViewReady ? 1 : 0)
+                // Hide content while positioning and show only when ready and container is visible
+                .opacity((isViewReady && !isSettingScrollPosition) ? 1 : 0)
                 .onPreferenceChange(ScrollPositionPreferenceKey.self) { value in
                     if let scrollView = NSScrollView.current {
                         let currentOffset = scrollView.contentView.bounds.origin.y
                         scrollOffset = currentOffset
                     }
                 }
+                .onChange(of: isContainerVisible) { oldValue, newValue in
+                    if newValue && !oldValue {
+                        // Container became visible, restore scroll position
+                        restoreScrollPosition()
+                    }
+                }
                 .onAppear {
-                    Task { @MainActor in
-                        // Wait for content to be ready
-                        try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
-                        
-                        if let savedOffset = UserDefaults.standard.object(forKey: "lastScrollOffset") as? CGFloat {
-                            if let scrollView = NSScrollView.current {
-                                scrollView.contentView.scroll(to: NSPoint(x: 0, y: savedOffset))
-                                // Wait a frame to ensure the scroll position is set
-                                try? await Task.sleep(nanoseconds: 16_666_666) // 1/60th of a second
-                                isViewReady = true
-                            }
-                        } else {
-                            isViewReady = true
-                        }
-                        
-                        isRestoringScrollPosition = false
+                    // Only restore scroll position if we appear and container is visible
+                    if isContainerVisible {
+                        restoreScrollPosition()
                     }
                 }
             }
         }
         .onAppear {
+            // Only start as not ready if we need to load albums
+            isViewReady = !albums.isEmpty && !isSettingScrollPosition
+            
             if !hasInitialLoad {
                 hasInitialLoad = true
+                isRestoringScrollPosition = true
                 loadAlbumsTask = Task {
                     await loadAlbums()
                 }
@@ -117,7 +155,6 @@ struct AlbumsView: View {
                 let currentOffset = scrollView.contentView.bounds.origin.y
                 UserDefaults.standard.set(currentOffset, forKey: "lastScrollOffset")
             }
-            isViewReady = false
         }
         .onChange(of: libraryViewModel.tracks) { oldValue, newValue in
             // Only reload if the tracks actually changed and we've done initial load
@@ -131,12 +168,48 @@ struct AlbumsView: View {
         .navigationTitle("Albums")
     }
     
+    private func restoreScrollPosition() {
+        Task { @MainActor in
+            // Only restore scroll position if we already have albums loaded
+            if !albums.isEmpty {
+                // Set flag to hide content during positioning
+                isSettingScrollPosition = true
+                isRestoringScrollPosition = true
+                
+                // Wait for content to be ready
+                try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds (reduced time)
+                
+                if let savedOffset = UserDefaults.standard.object(forKey: "lastScrollOffset") as? CGFloat {
+                    if let scrollView = NSScrollView.current {
+                        scrollView.contentView.scroll(to: NSPoint(x: 0, y: savedOffset))
+                        
+                        // Wait for a frame to ensure the scroll position is applied
+                        try? await Task.sleep(nanoseconds: 16_666_666) // 1/60th of a second
+                    }
+                }
+                
+                // Content is ready to show
+                isSettingScrollPosition = false
+                isViewReady = true
+                isRestoringScrollPosition = false
+            } else {
+                isViewReady = true
+            }
+        }
+    }
+    
     private func loadAlbums() async {
         let allAlbums = await libraryViewModel.allAlbums()
         
         await MainActor.run {
             albums = allAlbums
             isRestoringScrollPosition = false
+            
+            // Wait a moment before showing to ensure layout is complete
+            Task {
+                try? await Task.sleep(nanoseconds: 16_666_666) // 1/60th of a second
+                isViewReady = true
+            }
         }
     }
 }

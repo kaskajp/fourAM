@@ -149,7 +149,7 @@ struct ContentView: View {
             if let selection = selectedView.first {
                 switch selection {
                 case .albums:
-                    AlbumsView(
+                    AlbumsContainerView(
                         libraryViewModel: libraryViewModel,
                         onAlbumSelected: { album in
                             selectedAlbum = album
@@ -210,7 +210,7 @@ struct ContentView: View {
                     )
                 }
             } else {
-                AlbumsView(libraryViewModel: libraryViewModel, onAlbumSelected: { album in
+                AlbumsContainerView(libraryViewModel: libraryViewModel, onAlbumSelected: { album in
                     selectedAlbum = album
                     selectedView = [.albumDetail(album)]
                 })
@@ -446,8 +446,4 @@ struct ContentView: View {
             }
         }
     }
-}
-
-#Preview {
-    ContentView()
 }
