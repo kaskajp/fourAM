@@ -28,8 +28,6 @@ struct BookmarkManager {
         var dict = bookmarksDict
         dict[normalizedPath] = bookmarkData
         bookmarksDict = dict
-        
-        print("Bookmark stored for: \(normalizedPath) with enhanced security options")
     }
     
     // Explicitly request and store access for folder and subfolders
@@ -82,8 +80,6 @@ struct BookmarkManager {
         var dict = bookmarksDict
         dict[normalizedPath] = bookmarkData
         bookmarksDict = dict
-        
-        print("Bookmark stored with FULL access for: \(normalizedPath)")
     }
 
     // Resolve a previously stored bookmark with error handling
@@ -148,14 +144,12 @@ struct BookmarkManager {
                 if FileManager.default.fileExists(atPath: fileURL.path) {
                     do {
                         try storeBookmark(for: fileURL)
-                        print("Created new security-scoped bookmark for child file: \(fileURL.path)")
                     } catch {
                         print("Note: Could not create security bookmark for child: \(error)")
                         // Continue anyway - we'll use the parent folder's security scope
                     }
                 }
                 
-                print("Resolved from parent folder: \(parentFolder) -> \(fileURL.path)")
                 return fileURL
             } catch {
                 print("Error resolving parent bookmark for \(parentFolder): \(error)")
@@ -205,10 +199,8 @@ struct BookmarkManager {
     
     // Debug function to print all stored bookmarks
     static func printAllBookmarks() {
-        print("=== Stored Bookmarks ===")
         for (path, _) in bookmarksDict {
             print("- \(path)")
         }
-        print("========================")
     }
 }
