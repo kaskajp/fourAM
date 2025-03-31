@@ -9,6 +9,7 @@ enum SelectionValue: Hashable {
     case favoriteTracks
     case playlist(Playlist)
     case searchResults
+    case recentlyAdded
 }
 
 struct ContentView: View {
@@ -64,6 +65,14 @@ struct ContentView: View {
                                 Image(systemName: "square.stack")
                                     .foregroundColor(.indigo)
                                 Text("Albums")
+                            }
+                        }
+                        
+                        NavigationLink(value: SelectionValue.recentlyAdded) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "clock")
+                                    .foregroundColor(.indigo)
+                                Text("Recently Added")
                             }
                         }
                     }
@@ -467,6 +476,69 @@ struct ContentView: View {
                                     }
                                 }
                             }
+                        case .recentlyAdded:
+                            RecentlyAddedView(
+                                libraryViewModel: libraryViewModel,
+                                onAlbumSelected: { album in
+                                    selectedAlbum = album
+                                    selectedView = [.albumDetail(album)]
+                                }
+                            )
+                            .toolbar {
+                                ToolbarItemGroup(placement: .automatic) {
+                                    // Custom search implementation
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "magnifyingglass")
+                                            .foregroundColor(.gray)
+                                            .font(.system(size: 12))
+                                        
+                                        TextField("Search", text: $appState.globalSearchQuery)
+                                            .textFieldStyle(PlainTextFieldStyle())
+                                            .font(.system(size: 13))
+                                            .frame(width: 200)
+                                            .onSubmit {
+                                                Task {
+                                                    await performGlobalSearch()
+                                                }
+                                            }
+                                            .onChange(of: appState.globalSearchQuery) { _, newValue in
+                                                searchDebounceTask?.cancel()
+                                                searchDebounceTask = Task {
+                                                    try? await Task.sleep(nanoseconds: 300_000_000) // 300ms delay
+                                                    if !Task.isCancelled {
+                                                        await performGlobalSearch()
+                                                    }
+                                                }
+                                            }
+                                        
+                                        if !appState.globalSearchQuery.isEmpty {
+                                            Button {
+                                                appState.clearSearch()
+                                            } label: {
+                                                Image(systemName: "xmark.circle.fill")
+                                                    .foregroundColor(.gray)
+                                                    .font(.system(size: 12))
+                                            }
+                                            .buttonStyle(PlainButtonStyle())
+                                        }
+                                    }
+                                    .padding(6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.gray.opacity(0.2))
+                                    )
+                                    
+                                    // Show search results button when there are results
+                                    if !appState.searchResults.isEmpty {
+                                        Button {
+                                            selectedView = [.searchResults]
+                                        } label: {
+                                            Text("\(appState.searchResults.totalCount) results")
+                                                .font(.system(size: 12))
+                                        }
+                                    }
+                                }
+                            }
                         }
                     } else {
                         AlbumsView(libraryViewModel: libraryViewModel, onAlbumSelected: { album in
@@ -576,7 +648,7 @@ struct ContentView: View {
                     print("Secure access granted for folder: \(selectedFolder.path)")
                     
                     // DEBUG: Print all bookmarks to verify
-                    BookmarkManager.printAllBookmarks()
+                    // BookmarkManager.printAllBookmarks()
                     
                     // Start accessing the folder's security scope
                     guard selectedFolder.startAccessingSecurityScopedResource() else {

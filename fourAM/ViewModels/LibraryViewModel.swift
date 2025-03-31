@@ -9,6 +9,8 @@ class LibraryViewModel: ObservableObject {
     @Published var progress: Double = 0.0
     @Published var currentPhase: String = "Scanning files..."
     @Published var isLoadingAlbums: Bool = false  // New loading state
+    @Published var albumCache: [String: Album] = [:]
+    @Published var thumbnailCache: ThumbnailCache = ThumbnailCache()
     
     // Add cache for albums
     private var albumsCache: [String: [Album]] = [:]
@@ -18,6 +20,10 @@ class LibraryViewModel: ObservableObject {
     // Add task tracking
     private var currentScanTask: Task<Void, Never>?
     private var currentLoadTask: Task<Void, Never>?
+    
+    private var modelContext: ModelContext?
+    private var fileScanner: FileScanner?
+    private var metadataExtractor: MetadataExtractor?
     
     private init() {}
     
@@ -158,42 +164,46 @@ class LibraryViewModel: ObservableObject {
                                 if Task.isCancelled { break }
                                 
                                 group.addTask {
-                                    await semaphore.wait()
-                                    defer { Task { await semaphore.signal() } }
-                                    
-                                    do {
-                                        let audioFile = try await MetadataExtractor.extract(from: url)
+                                    // Create a task to handle semaphore operations
+                                    await Task {
+                                        await semaphore.wait()
+                                        defer { Task { await semaphore.signal() } }
                                         
-                                        if !existingPaths.contains(url.path) {
-                                            if !audioFile.album.isEmpty {
-                                                if let artwork = audioFile.artwork,
-                                                   NSImage(data: artwork) != nil {
-                                                    if let thumbnail = self.createThumbnail(from: artwork, maxDimension: 300) {
-                                                        await thumbnailCache.setThumbnail(thumbnail, for: audioFile.album)
+                                        do {
+                                            let audioFile = try await MetadataExtractor.extract(from: url)
+                                            
+                                            if !existingPaths.contains(url.path) {
+                                                if !audioFile.album.isEmpty {
+                                                    if let artwork = audioFile.artwork,
+                                                       NSImage(data: artwork) != nil {
+                                                        if let thumbnail = self.createThumbnail(from: artwork, maxDimension: 300) {
+                                                            await self.thumbnailCache.setThumbnail(thumbnail, for: audioFile.album)
+                                                        }
                                                     }
                                                 }
+                                                
+                                                return Track(
+                                                    path: url.path,
+                                                    url: url,
+                                                    title: audioFile.title,
+                                                    artist: audioFile.artist,
+                                                    album: audioFile.album,
+                                                    discNumber: audioFile.discNumber,
+                                                    albumArtist: audioFile.albumArtist,
+                                                    artwork: audioFile.artwork,
+                                                    thumbnail: await self.thumbnailCache.getThumbnail(for: audioFile.album),
+                                                    trackNumber: audioFile.trackNumber,
+                                                    durationString: audioFile.durationString,
+                                                    genre: audioFile.genre,
+                                                    releaseYear: audioFile.releaseYear,
+                                                    additionDate: Date()  // Set date only for new tracks
+                                                )
                                             }
-                                            
-                                            return Track(
-                                                path: url.path,
-                                                url: url,
-                                                title: audioFile.title,
-                                                artist: audioFile.artist,
-                                                album: audioFile.album,
-                                                discNumber: audioFile.discNumber,
-                                                albumArtist: audioFile.albumArtist,
-                                                artwork: audioFile.artwork,
-                                                thumbnail: await thumbnailCache.getThumbnail(for: audioFile.album),
-                                                trackNumber: audioFile.trackNumber,
-                                                durationString: audioFile.durationString,
-                                                genre: audioFile.genre,
-                                                releaseYear: audioFile.releaseYear
-                                            )
+                                        } catch {
+                                            print("Error processing file \(url): \(error)")
                                         }
-                                    } catch {
-                                        print("Error processing file \(url): \(error)")
-                                    }
-                                    return nil
+                                        return nil
+                                    }.value
                                 }
                             }
                             
@@ -253,14 +263,13 @@ class LibraryViewModel: ObservableObject {
         // Get the relative path from the top level folder to our target folder
         let relativeSubPath = albumFolderPath.dropFirst(topLevelFolderPath.count)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        
+        // Construct the full path, ensuring it starts with a slash for external volumes
         let folderPath = "/" + resolvedFolder.appendingPathComponent(relativeSubPath, isDirectory: true).path
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         
         // Clear cache before rescanning
         clearAlbumsCache()
-        
-        // Store the album name for verification after rescan
-        let albumName = album.name
         
         // Delete the album first
         deleteAlbum(album, context: context)
@@ -305,33 +314,32 @@ class LibraryViewModel: ObservableObject {
                                     do {
                                         let audioFile = try await MetadataExtractor.extract(from: url)
                                         
-                                        // Only process files that match the album name
-                                        if audioFile.album == albumName {
-                                            if !audioFile.album.isEmpty {
-                                                if let artwork = audioFile.artwork,
-                                                   NSImage(data: artwork) != nil {
-                                                    if let thumbnail = self.createThumbnail(from: artwork, maxDimension: 300) {
-                                                        await thumbnailCache.setThumbnail(thumbnail, for: audioFile.album)
-                                                    }
+                                        // Process all files in the folder since we're filtering by folder path
+                                        if !audioFile.album.isEmpty {
+                                            if let artwork = audioFile.artwork,
+                                               NSImage(data: artwork) != nil {
+                                                if let thumbnail = self.createThumbnail(from: artwork, maxDimension: 300) {
+                                                    await thumbnailCache.setThumbnail(thumbnail, for: audioFile.album)
                                                 }
                                             }
-                                            
-                                            return Track(
-                                                path: url.path,
-                                                url: url,
-                                                title: audioFile.title,
-                                                artist: audioFile.artist,
-                                                album: audioFile.album,
-                                                discNumber: audioFile.discNumber,
-                                                albumArtist: audioFile.albumArtist,
-                                                artwork: audioFile.artwork,
-                                                thumbnail: await thumbnailCache.getThumbnail(for: audioFile.album),
-                                                trackNumber: audioFile.trackNumber,
-                                                durationString: audioFile.durationString,
-                                                genre: audioFile.genre,
-                                                releaseYear: audioFile.releaseYear
-                                            )
                                         }
+                                        
+                                        return Track(
+                                            path: url.path,
+                                            url: url,
+                                            title: audioFile.title,
+                                            artist: audioFile.artist,
+                                            album: audioFile.album,
+                                            discNumber: audioFile.discNumber,
+                                            albumArtist: audioFile.albumArtist,
+                                            artwork: audioFile.artwork,
+                                            thumbnail: await thumbnailCache.getThumbnail(for: audioFile.album),
+                                            trackNumber: audioFile.trackNumber,
+                                            durationString: audioFile.durationString,
+                                            genre: audioFile.genre,
+                                            releaseYear: audioFile.releaseYear,
+                                            additionDate: Date()  // Set current date when rescanning
+                                        )
                                     } catch {
                                         print("Error processing file \(url): \(error)")
                                     }

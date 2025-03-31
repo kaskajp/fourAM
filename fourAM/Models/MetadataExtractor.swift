@@ -116,26 +116,15 @@ struct MetadataExtractor {
                 if finalTrack == nil {
                     finalTrack = track
                 } else {
-                    // Merge metadata, preferring TagLib data over AVAsset data
-                    finalTrack = Track(
-                        path: track.path,
-                        url: track.url,
-                        title: finalTrack?.title ?? track.title,
-                        artist: finalTrack?.artist ?? track.artist,
-                        album: finalTrack?.album ?? track.album,
-                        discNumber: finalTrack?.discNumber ?? track.discNumber,
-                        albumArtist: finalTrack?.albumArtist ?? track.albumArtist,
-                        artwork: finalTrack?.artwork ?? track.artwork,
-                        trackNumber: finalTrack?.trackNumber ?? track.trackNumber,
-                        durationString: track.durationString, // Use AVAsset duration
-                        genre: finalTrack?.genre ?? track.genre,
-                        releaseYear: finalTrack?.releaseYear ?? track.releaseYear
-                    )
+                    // Merge the best data from both tracks
+                    finalTrack?.durationString = track.durationString
+                    if finalTrack?.artwork == nil {
+                        finalTrack?.artwork = track.artwork
+                    }
                 }
             }
             
             guard let track = finalTrack else {
-                print("Failed to extract any metadata for \(url.path)")
                 throw NSError(domain: "MetadataExtractor", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to extract metadata"])
             }
             
