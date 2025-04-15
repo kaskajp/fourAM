@@ -11,6 +11,17 @@ struct fourAMApp: App {
     private let appState = AppState.shared
     
     init() {
+        // Force linking of TagLib symbols
+        forceTagLibSymbolLinking()
+        
+        // Force linking of additional TagLib symbols
+        let byteVector = taglib_bytevector_create()
+        if byteVector != nil {
+            _ = taglib_bytevector_data(byteVector)
+            _ = taglib_bytevector_size(byteVector)
+            taglib_bytevector_destroy(byteVector)
+        }
+        
         if let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             print("App Support Path: \(appSupportURL.path)")
         } else {
