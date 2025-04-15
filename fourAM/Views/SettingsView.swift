@@ -6,10 +6,10 @@ struct SettingsView: View {
     
     var body: some View {
         TabView {
-            /*GeneralSettingsView()
+            GeneralSettingsView()
                 .tabItem {
                     Label("General", systemImage: "gear")
-                }*/
+                }
             
             LibrarySettingsView(modelContext: modelContext)
                 .tabItem {
@@ -21,9 +21,9 @@ struct SettingsView: View {
                     Label("Output", systemImage: "speaker.wave.2")
                 }*/
             
-            AppearanceSettingsView()
+            ArtworkSettingsView()
                 .tabItem {
-                    Label("Appearance", systemImage: "paintpalette")
+                    Label("Artwork", systemImage: "photo.artframe")
                 }
         }
         .frame(width: 500, height: 400) // Adjust the size of the settings window

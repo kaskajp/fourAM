@@ -1,33 +1,67 @@
-import SwiftUI
+import Foundation
+import AppKit
 
 actor ThumbnailCache {
-    private var cache: [String: Data] = [:]
-    private var pending: [String: CheckedContinuation<Data?, Never>] = [:]
+    static let shared = ThumbnailCache()
+    
+    private let fileManager = FileManager.default
+    private let cacheDirectory: URL
+    
+    init() {
+        // Get the application's cache directory
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appFolder = appSupport.appendingPathComponent("fourAM")
+        print("App folder: \(appFolder)")
 
-    func getThumbnail(for album: String) -> Data? {
-        return cache[album]
+        cacheDirectory = appFolder.appendingPathComponent("Thumbnails")
+        // Create cache directory if it doesn't exist
+        try? fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
-
-    func setThumbnail(_ data: Data, for album: String) {
-        cache[album] = data
-        
-        // Resolve any pending continuation for this album
-        if let continuation = pending.removeValue(forKey: album) {
-            continuation.resume(returning: data)
-        }
+    
+    func getThumbnail(for album: String) async -> Data? {
+        let fileURL = cacheDirectory.appendingPathComponent(album.sha256())
+        return try? Data(contentsOf: fileURL)
     }
-
-    func waitForThumbnail(for album: String) async -> Data? {
-        if let cachedThumbnail = cache[album] {
-            return cachedThumbnail // Return immediately if cached
-        }
-        
-        return await withCheckedContinuation { continuation in
-            pending[album] = continuation
+    
+    func setThumbnail(_ thumbnail: Data, for album: String) async {
+        let fileURL = cacheDirectory.appendingPathComponent(album.sha256())
+        try? thumbnail.write(to: fileURL)
+    }
+    
+    func clearCache() async {
+        do {
+            let files = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: nil)
+            for file in files {
+                try? fileManager.removeItem(at: file)
+            }
+        } catch {
+            print("Error clearing thumbnail cache: \(error)")
         }
     }
     
-    func clear() {
-        cache.removeAll()
+    func getCacheSize() async -> Int64 {
+        do {
+            let files = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.fileSizeKey])
+            return try files.reduce(0) { total, file in
+                let attributes = try file.resourceValues(forKeys: [.fileSizeKey])
+                return total + Int64(attributes.fileSize ?? 0)
+            }
+        } catch {
+            print("Error calculating cache size: \(error)")
+            return 0
+        }
+    }
+    
+    func getCachePath() async -> String {
+        return cacheDirectory.path
+    }
+}
+
+// Helper extension to create hash of strings
+extension String {
+    func sha256() -> String {
+        // Use Swift's built-in hashing
+        let hash = self.hashValue
+        return String(format: "%x", hash)
     }
 }

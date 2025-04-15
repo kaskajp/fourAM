@@ -11,6 +11,11 @@ struct Album: Identifiable, Hashable {
     let totalTracks: Int
     let genre: String
     
+    var additionDate: Date {
+        // Use the earliest track's addition date, or current date if no tracks have dates
+        tracks.map { $0.additionDate }.compactMap { $0 }.min() ?? Date()
+    }
+    
     init(name: String, albumArtist: String?, artwork: Data?, thumbnail: Data?, tracks: [Track], releaseYear: Int, genre: String, totalTracks: Int = 0) {
         self.name = name
         self.albumArtist = albumArtist ?? "Unknown Album Artist"

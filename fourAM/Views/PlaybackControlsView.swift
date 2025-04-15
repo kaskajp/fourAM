@@ -10,12 +10,13 @@ struct PlaybackControlsView: View {
             HStack(alignment: .center) {
                 // Album artwork and track details
                 HStack(spacing: 8) {
-                    if let artworkData = playbackManager.currentTrack?.thumbnail, let nsImage = NSImage(data: artworkData) {
-                        Image(nsImage: nsImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 50, height: 50) // Fixed size for album artwork
-                            .shadow(radius: 2) // Subtle shadow
+                    if let track = playbackManager.currentTrack {
+                        OptimizedAlbumArtView(
+                            thumbnailData: track.thumbnail,
+                            albumId: track.id.uuidString,
+                            size: 50
+                        )
+                        .shadow(radius: 2) // Subtle shadow
                     } else {
                         Rectangle()
                             .fill(Color.gray.opacity(0.3)) // Placeholder for missing artwork
@@ -72,8 +73,8 @@ struct PlaybackControlsView: View {
                     .onAppear {
                         scrubberTime = playbackManager.currentTime
                     }
-                    .onChange(of: playbackManager.currentTime) { newTime in
-                        scrubberTime = newTime
+                    .onChange(of: playbackManager.currentTime) { oldValue, newValue in
+                        scrubberTime = newValue
                     }
                 }
                 

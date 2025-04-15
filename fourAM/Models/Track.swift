@@ -19,6 +19,8 @@ class Track: Equatable {
     var releaseYear: Int
     var playCount: Int = 0
     var favorite: Bool = false
+    var additionDate: Date?
+    @Relationship(deleteRule: .nullify) var playlists: [Playlist]
 
     init(
         path: String,
@@ -35,7 +37,8 @@ class Track: Equatable {
         genre: String? = nil,
         releaseYear: Int = 0,
         playCount: Int = 0,
-        favorite: Bool = false
+        favorite: Bool = false,
+        additionDate: Date? = nil
     ) {
         self.path = path
         self.url = url
@@ -52,6 +55,8 @@ class Track: Equatable {
         self.releaseYear = releaseYear
         self.playCount = playCount
         self.favorite = favorite
+        self.additionDate = additionDate
+        self.playlists = []
     }
     
     static func == (lhs: Track, rhs: Track) -> Bool {

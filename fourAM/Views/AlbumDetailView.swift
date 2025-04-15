@@ -1,32 +1,39 @@
 import SwiftUI
 import AppKit
+import SwiftData
 
 struct AlbumDetailView: View {
     let album: Album
     let onBack: () -> Void // Closure to handle the back button action
+    let sourceView: SelectionValue // Track where the album was opened from
 
     @Environment(\.modelContext) var modelContext
-    @ObservedObject var libraryViewModel = LibraryViewModel.shared
-    @StateObject private var keyMonitorManager = KeyMonitorManager()
+    @ObservedObject var libraryViewModel: LibraryViewModel
+    @ObservedObject private var keyMonitorManager = KeyMonitorManager.shared
     @FocusState private var isSearchFieldFocused: Bool
     @Environment(\.dismiss) var dismiss // Replace presentationMode with dismiss
     @State private var searchText: String = "" // To manage the search input
-    @State private var selectedTrack: Track? // Track currently selected
-
+    @State private var selectedTrack: Track? = nil
+    @State private var playTask: Task<Void, Never>?
+    @State private var showNewPlaylistSheet = false
+    @State private var trackToAddToNewPlaylist: Track? = nil
+    @State private var scrollPosition: String? = nil // Track scroll position
+    
     var body: some View {
         // Group and sort tracks
-        let groupedTracks = Dictionary(grouping: album.tracks) { $0.discNumber ?? 1 }
-        let sortedDiscs = groupedTracks.keys.sorted()
         let filteredTracks = album.tracks.filter { track in
             searchText.isEmpty || track.title.lowercased().contains(searchText.lowercased())
         }
-        let filteredGroupedTracks = Dictionary(grouping: filteredTracks) { $0.discNumber ?? 1 }
+        let filteredGroupedTracks = Dictionary(grouping: filteredTracks) { $0.discNumber }
         let filteredSortedDiscs = filteredGroupedTracks.keys.sorted()
 
         return VStack(alignment: .leading) {
             // Top bar
             HStack(alignment: .center) {
-                Button(action: onBack) { // Call the provided back action
+                Button(action: {
+                    // Navigate back to the source view
+                    onBack()
+                }) {
                     Image(systemName: "chevron.left")
                         .font(.title2)
                         .foregroundColor(.primary)
@@ -54,20 +61,13 @@ struct AlbumDetailView: View {
 
             // Album header (cover + album title)
             HStack(spacing: 8) {
-                if let data = album.thumbnail,
-                   let nsImage = NSImage(data: data) {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 180, height: 180)
-                        .cornerRadius(4)
-                        .clipped()
-                } else {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.5))
-                        .frame(width: 180, height: 180)
-                        .cornerRadius(4)
-                }
+                // Use optimized image view
+                OptimizedAlbumArtView(
+                    thumbnailData: album.thumbnail,
+                    albumId: album.id.uuidString,
+                    size: 180
+                )
+                
                 VStack(alignment: .leading, spacing: 8) {
                     Text(album.name)
                         .font(.title)
@@ -118,6 +118,7 @@ struct AlbumDetailView: View {
                             }
                             .background(Color.clear) // Ensure no background
                             .padding(.horizontal, 8) // Match content padding
+                            .id("disc\(disc)") // Add ID for scroll position
 
                             // Tracks for the current disc
                             trackList(for: disc, tracks: filteredGroupedTracks[disc]!)
@@ -129,6 +130,7 @@ struct AlbumDetailView: View {
                     .padding(0)
                 }
             }
+            .scrollPosition(id: $scrollPosition, anchor: .top)
             .scrollContentBackground(.hidden)
             .background(Color.clear)
             .listStyle(.plain) // Removes additional styling applied by default
@@ -140,9 +142,18 @@ struct AlbumDetailView: View {
         .navigationTitle(album.name)
         .onAppear {
             keyMonitorManager.startMonitoring { isSearchFieldFocused }
+            // Restore scroll position if available
+            if let lastPosition = UserDefaults.standard.string(forKey: "lastScrollPosition_\(album.id)") {
+                scrollPosition = lastPosition
+            }
         }
         .onDisappear {
             keyMonitorManager.stopMonitoring()
+            playTask?.cancel()
+            // Save scroll position
+            if let position = scrollPosition {
+                UserDefaults.standard.set(position, forKey: "lastScrollPosition_\(album.id)")
+            }
         }
     }
     
@@ -217,15 +228,43 @@ struct AlbumDetailView: View {
                 Button("Reset Play Count") {
                     libraryViewModel.resetPlayCountForTrack(for: track, context: modelContext)
                 }
+                
+                Divider()
+                
+                Menu("Add to Playlist") {
+                    let playlists = (try? modelContext.fetch(FetchDescriptor<Playlist>())) ?? []
+                    
+                    ForEach(playlists) { playlist in
+                        Button {
+                            playlist.addTrack(track)
+                            try? modelContext.save()
+                        } label: {
+                            Label(playlist.name, systemImage: "music.note.list")
+                        }
+                    }
+                    
+                    if playlists.isEmpty {
+                        Text("No Playlists")
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Divider()
+                    
+                    Button {
+                        showNewPlaylistSheet = true
+                        trackToAddToNewPlaylist = track
+                    } label: {
+                        Label("New Playlist...", systemImage: "plus")
+                    }
+                }
             }
         }
     }
     
     private func toggleFavorite(for track: Track) {
-        guard let context = try? modelContext else { return }
         track.favorite.toggle()
         do {
-            try context.save()
+            try modelContext.save()
         } catch {
             print("Failed to toggle favorite: \(error)")
         }
@@ -242,10 +281,15 @@ struct AlbumDetailView: View {
     }
     
     private func playFirstTrack() {
-        guard let firstTrack = album.tracks.sorted(by: { $0.trackNumber < $1.trackNumber }).first else {
-            print("No tracks available to play.")
-            return
+        playTask?.cancel()
+        playTask = Task {
+            guard let firstTrack = album.tracks.sorted(by: { $0.trackNumber < $1.trackNumber }).first else {
+                print("No tracks available to play.")
+                return
+            }
+            await MainActor.run {
+                PlaybackManager.shared.play(track: firstTrack, tracks: PlaybackManager.shared.playQueue)
+            }
         }
-        PlaybackManager.shared.play(track: firstTrack, tracks: PlaybackManager.shared.playQueue)
     }
 }

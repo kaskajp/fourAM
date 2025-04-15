@@ -7,20 +7,16 @@ struct CustomNavigationLink: View {
     @Binding var selectedView: String?
 
     var body: some View {
-        NavigationLink(
-            destination: Text("\(title) View"), // Replace with actual destination
-            tag: viewName,
-            selection: $selectedView
-        ) {
+        NavigationLink(value: viewName) {
             HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .foregroundColor(selectedView == viewName ? .gray : .indigo) // Change icon color
+                    .foregroundColor(selectedView == viewName ? .gray : .indigo)
                 Text(title)
             }
             .padding(8)
-            .background(selectedView == viewName ? Color.gray.opacity(0.2) : Color.clear) // Change background
+            .background(selectedView == viewName ? Color.gray.opacity(0.2) : Color.clear)
             .cornerRadius(8)
         }
-        .buttonStyle(PlainButtonStyle()) // Removes default blue selection styling
+        .buttonStyle(PlainButtonStyle())
     }
 }
