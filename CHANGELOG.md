@@ -4,6 +4,21 @@ All changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.58.0 2025-04-15
+
+### Added
+- Remember scroll position in albums view.
+- Recently added view.
+- Settings view with more settings.
+- Global search.
+- Playlist support.
+- Added start at login setting.
+- Disk cache for cover images.
+- Open in Meta.
+
+### Changed
+- Improved performance.
+
 ## 0.57.0 2025-01-25
 
 ### Added
